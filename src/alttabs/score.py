@@ -231,7 +231,7 @@ class TabRenderer:
     def render(
         self,
         events: list[RealizedEvent],
-        measures_per_line: int = 4,
+        measures_per_line: int = 2,
     ) -> str:
         ordered_strings = [spec.number for spec in self.fretboard.tuning.strings]
 
