@@ -2,42 +2,69 @@ import streamlit as st
 
 from alttabs.pipeline import TransformRequest, transform_tab
 from alttabs.position_shift import PositionBias
+from ui.fretboard_component import fretboard_selector
 
 st.set_page_config(page_title="Alt Tabs", layout="wide")
 
-
-# -----------------------------
-# Config
-# -----------------------------
 INSTRUMENTS = {
     "acoustic_guitar": {
-        "label": "Acoustic Guitar",
-        "image": "assets/acoustic.png",
         "string_count": 6,
-        "open_notes": ["E", "A", "D", "G", "B", "E"],
-        "max_fret": 24,
+        "visible_frets": 14,
+        "theme": {
+            "boardBase": "#1f1a17",
+            "boardEdge": "#2b2521",
+            "fretColor": "#b9bcc2",
+            "nutColor": "#ddd3c3",
+            "inlayColor": "#e7dfd2",
+            "labelColor": "#d8d0c2",
+            "stringColor": "#c5c9cf",
+            "markerColor": "#d8b36a",
+            "markerStroke": "#fff7e8",
+            "hoverFill": "rgba(255,244,214,0.14)",
+            "bgTop": "#171311",
+            "bgBottom": "#0f0c0b",
+        },
     },
     "electric_guitar": {
-        "label": "Electric Guitar",
-        "image": "assets/electric.png",
         "string_count": 6,
-        "open_notes": ["E", "A", "D", "G", "B", "E"],  # low -> high
-        "max_fret": 24,
+        "visible_frets": 14,
+        "theme": {
+            "boardBase": "#b98b56",
+            "boardEdge": "#9a6f42",
+            "fretColor": "#a9adb3",
+            "nutColor": "#eee3d1",
+            "inlayColor": "#111111",
+            "labelColor": "#2a2119",
+            "stringColor": "#b7bcc3",
+            "markerColor": "#2a2a2a",
+            "markerStroke": "#f5efe6",
+            "hoverFill": "rgba(0,0,0,0.08)",
+            "bgTop": "#191614",
+            "bgBottom": "#110f0e",
+        },
     },
     "bass": {
-        "label": "Bass",
-        "image": "assets/bass.png",
         "string_count": 4,
-        "open_notes": ["E", "A", "D", "G"],  # low -> high
-        "max_fret": 24,
+        "visible_frets": 14,
+        "theme": {
+            "boardBase": "#b98b56",
+            "boardEdge": "#9a6f42",
+            "fretColor": "#a9adb3",
+            "nutColor": "#eee3d1",
+            "inlayColor": "#111111",
+            "labelColor": "#2a2119",
+            "stringColor": "#cfd3d8",
+            "markerColor": "#2a2a2a",
+            "markerStroke": "#f5efe6",
+            "hoverFill": "rgba(0,0,0,0.08)",
+            "bgTop": "#191614",
+            "bgBottom": "#110f0e",
+        },
     },
 }
 
-
-# -----------------------------
-# State init
-# -----------------------------
 defaults = {
+    "text": "",
     "instrument": "acoustic_guitar",
     "transpose_semitones": 0,
     "shift_positions": False,
@@ -46,125 +73,68 @@ defaults = {
     "anchor_fret": 3,
     "max_fret_deviation": 6,
     "measures_per_line": 4,
-    "text": "",
-    "result": None,
-    "error": None,
 }
 
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+st.title("Alt Tabs")
 
-# -----------------------------
-# Helpers
-# -----------------------------
-def set_instrument(name: str):
-    st.session_state.instrument = name
+st.text_area("Input tab", key="text", height=300)
 
-    string_count = INSTRUMENTS[name]["string_count"]
+instrument = st.selectbox(
+    "Instrument",
+    ["acoustic_guitar", "electric_guitar", "bass"],
+    key="instrument",
+)
 
-    # Keep anchor string valid when switching instrument
-    if st.session_state.anchor_string > string_count:
-        st.session_state.anchor_string = string_count
+cfg = INSTRUMENTS[instrument]
 
+if instrument == "bass" and st.session_state.anchor_string > 4:
+    st.session_state.anchor_string = 4
 
-def select_position(string_number: int, fret: int):
-    st.session_state.anchor_string = string_number
-    st.session_state.anchor_fret = fret
-    st.session_state.shift_positions = True
+component_result = fretboard_selector(
+    instrument=instrument,
+    string_count=cfg["string_count"],
+    visible_frets=cfg["visible_frets"],
+    selected_string=st.session_state.anchor_string,
+    selected_fret=st.session_state.anchor_fret,
+    theme=cfg["theme"],
+    key="main_fretboard",
+)
 
+if component_result is not None:
+    if getattr(component_result, "selectedString", None) is not None:
+        st.session_state.anchor_string = int(component_result.selectedString)
+    if getattr(component_result, "selectedFret", None) is not None:
+        st.session_state.anchor_fret = int(component_result.selectedFret)
+        st.session_state.shift_positions = True
 
-def render_instrument_selector():
-    st.subheader("Instrument")
-
-    cols = st.columns(3)
-    instrument_keys = list(INSTRUMENTS.keys())
-
-    for col, key in zip(cols, instrument_keys):
-        cfg = INSTRUMENTS[key]
-        selected = st.session_state.instrument == key
-
-        with col:
-            st.image(cfg["image"], use_container_width=True)
-            button_label = f"{'●' if selected else '○'} {cfg['label']}"
-            st.button(
-                button_label,
-                key=f"instrument_{key}",
-                use_container_width=True,
-                on_click=set_instrument,
-                args=(key,),
-                type="primary" if selected else "secondary",
-            )
-
-
-def render_fretboard_selector():
-    instrument = st.session_state.instrument
-    cfg = INSTRUMENTS[instrument]
-    string_count = cfg["string_count"]
-    max_fret = cfg["max_fret"]
-
-    st.subheader("Target position")
-    st.caption(
-        "Click the fret where the first played note should land. "
-        "This sets anchor_string and anchor_fret."
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.number_input(
+        "Transpose (semitones)",
+        min_value=-24,
+        max_value=24,
+        step=1,
+        key="transpose_semitones",
+    )
+with col2:
+    st.checkbox("Shift positions", key="shift_positions")
+with col3:
+    st.selectbox(
+        "Bias",
+        [PositionBias.DOWN, PositionBias.CENTERED, PositionBias.UP],
+        key="bias",
+        format_func=lambda x: x.value,
     )
 
-    selected_string = st.session_state.anchor_string
-    selected_fret = st.session_state.anchor_fret
+st.caption(
+    f"Selected target: string {st.session_state.anchor_string}, fret {st.session_state.anchor_fret}"
+)
 
-    # Fret header
-    header_cols = st.columns([1.2] + [1] * (max_fret + 1))
-    with header_cols[0]:
-        st.markdown("**String**")
-    for fret in range(max_fret + 1):
-        with header_cols[fret + 1]:
-            st.markdown(f"**{fret}**")
-
-    # Display top string first visually, but keep numbering consistent:
-    # string 1 = highest-pitched string
-    # string 6 or 4 = lowest-pitched string
-    #
-    # Your backend currently seems to use guitar-style numbering where:
-    # 1 = high E, 6 = low E
-    #
-    # open_notes in config are low -> high, so reverse for rendering.
-    visual_rows = []
-    for idx in range(string_count):
-        backend_string_number = idx + 1  # 1..N high->low? depends on your convention
-        visual_rows.append(backend_string_number)
-
-    # If your backend uses 1 = high string, 6 = low string, render low at bottom:
-    # show high string first
-    for string_number in visual_rows:
-        row = st.columns([1.2] + [1] * (max_fret + 1))
-
-        with row[0]:
-            st.markdown(f"**{string_number}**")
-
-        for fret in range(max_fret + 1):
-            is_selected = string_number == selected_string and fret == selected_fret
-
-            label = "●" if is_selected else "○"
-            row[fret + 1].button(
-                label,
-                key=f"pos_s{string_number}_f{fret}",
-                on_click=select_position,
-                args=(string_number, fret),
-                use_container_width=True,
-                type="primary" if is_selected else "secondary",
-            )
-
-    st.caption(
-        f"Selected target: string {st.session_state.anchor_string}, "
-        f"fret {st.session_state.anchor_fret}"
-    )
-
-
-def run_transform():
-    st.session_state.error = None
-    st.session_state.result = None
-
+if st.button("Transform", type="primary", use_container_width=True):
     try:
         result = transform_tab(
             TransformRequest(
@@ -187,94 +157,8 @@ def run_transform():
                 measures_per_line=st.session_state.measures_per_line,
             )
         )
-        st.session_state.result = result
-
+        st.subheader("Output")
+        st.code(result.rendered_tab)
     except Exception as e:
-        st.session_state.error = str(e)
-
-
-# -----------------------------
-# UI
-# -----------------------------
-st.title("Alt Tabs")
-
-render_instrument_selector()
-
-st.divider()
-
-st.subheader("Input tab")
-st.text_area(
-    "Input tab",
-    key="text",
-    height=320,
-    label_visibility="collapsed",
-    placeholder="Paste tab here...",
-)
-
-controls_left, controls_right = st.columns([1.4, 1])
-
-with controls_left:
-    st.subheader("Transform")
-
-    row1 = st.columns(3)
-    row1[0].number_input(
-        "Transpose (semitones)",
-        min_value=-24,
-        max_value=24,
-        step=1,
-        key="transpose_semitones",
-    )
-    row1[1].checkbox("Shift positions", key="shift_positions")
-    row1[2].selectbox(
-        "Bias",
-        [PositionBias.DOWN, PositionBias.CENTERED, PositionBias.UP],
-        key="bias",
-        format_func=lambda x: x.value,
-    )
-
-    row2 = st.columns(3)
-    row2[0].number_input(
-        "Max fret deviation",
-        min_value=1,
-        max_value=24,
-        step=1,
-        key="max_fret_deviation",
-    )
-    row2[1].number_input(
-        "Measures per line",
-        min_value=1,
-        max_value=16,
-        step=1,
-        key="measures_per_line",
-    )
-    row2[2].empty()
-
-with controls_right:
-    st.subheader("Selected position")
-    st.metric("Anchor string", st.session_state.anchor_string)
-    st.metric("Anchor fret", st.session_state.anchor_fret)
-
-if st.session_state.shift_positions:
-    render_fretboard_selector()
-
-st.divider()
-
-st.button("Transform", type="primary", use_container_width=True, on_click=run_transform)
-
-st.divider()
-
-st.subheader("Output")
-
-if st.session_state.error:
-    st.error(st.session_state.error)
-
-if st.session_state.result:
-    result = st.session_state.result
-
-    st.code(result.rendered_tab)
-
-    stats_cols = st.columns(3)
-    stats_cols[0].metric("Parsed blocks", result.parsed_block_count)
-    stats_cols[1].metric("Expanded events", result.expanded_event_count)
-    stats_cols[2].metric("Measures", result.measure_count)
+        st.error(str(e))
 

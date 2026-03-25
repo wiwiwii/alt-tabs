@@ -1,0 +1,91 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.component-root {
+  width: 100%;
+}
+
+.fretboard-shell {
+  width: 100%;
+}
+
+.badge {
+  margin-bottom: 8px;
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--st-text-color, #f2f2f2);
+  font-size: 14px;
+}
+
+.fretboard {
+  width: 100%;
+  display: block;
+}
+
+.fret-line {
+  stroke-opacity: 0.86;
+  stroke-linecap: round;
+  stroke-width: 2.5;
+}
+
+.nut-line {
+  stroke-opacity: 0;
+}
+
+.string-line {
+  stroke-linecap: round;
+  opacity: 0.96;
+}
+
+.inlay {
+  opacity: 0.92;
+}
+
+.hover-cell {
+  fill: rgba(255, 244, 214, 0.14);
+  stroke: rgba(255, 244, 214, 0.22);
+  stroke-width: 1;
+}
+
+.selected-cell {
+  fill: rgba(216, 179, 106, 0.11);
+  stroke: rgba(255, 238, 198, 0.42);
+  stroke-width: 1.2;
+}
+
+.selected-marker-halo {
+  fill: rgba(255, 247, 232, 0.15);
+}
+
+.selected-marker {
+  stroke-width: 2;
+}
+
+.hit-cell {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.fret-label,
+.string-label {
+  fill: #d8d0c2;
+  font-size: 14px;
+  user-select: none;
+}
+
+.fret-label {
+  text-anchor: middle;
+}
