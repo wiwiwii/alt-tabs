@@ -23,7 +23,9 @@ def transpose_events(events, fretboard, interval: Interval):
             else:
                 new_notes.append(PlayedNote(new_pitch, FretPosition(string, fret)))
 
-        new_events.append(RealizedEvent(event.at_column, new_notes))
+        new_events.append(
+            RealizedEvent(event.measure_index, event.at_column, new_notes)
+        )
 
     return new_events
 
@@ -44,10 +46,14 @@ parsed = parser.parse(text)
 
 events = [
     RealizedEvent(
+        measure_index=event.measure_index,
         at_column=event.at_column,
         notes=list(event.notes),
     )
     for event in parsed.events
 ]
 transposed = transpose_events(events, presets["acoustic_guitar"], Interval(2))
+print("Original:")
+print(renderer.render_preserving_columns(events))
+print("Transposed:")
 print(renderer.render_preserving_columns(transposed))
