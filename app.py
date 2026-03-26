@@ -4,6 +4,8 @@ import streamlit as st
 
 from alttabs.pipeline import TransformRequest, transform_tab
 from alttabs.position_shift import PositionBias
+from src.alttabs.instrument import presets
+from src.alttabs.pitch import NoteName
 from ui.fretboard_component import fretboard_selector
 
 st.set_page_config(page_title="Alt Tabs", layout="wide")
@@ -36,7 +38,7 @@ INSTRUMENTS = {
         "label": "Electric Guitar",
         "image": str(ASSETS_DIR / "telecaster.png"),
         "string_count": 6,
-        "visible_frets": 14,
+        "visible_frets": 22,
         "theme": {
             "boardBase": "#b98b56",
             "boardEdge": "#9a6f42",
@@ -56,7 +58,7 @@ INSTRUMENTS = {
         "label": "Bass",
         "image": str(ASSETS_DIR / "musicman.png"),
         "string_count": 4,
-        "visible_frets": 14,
+        "visible_frets": 20,
         "theme": {
             "boardBase": "#b98b56",
             "boardEdge": "#9a6f42",
@@ -77,17 +79,15 @@ INSTRUMENTS = {
 defaults = {
     "text": "",
     "instrument": "acoustic_guitar",
-    "transpose_semitones": 0,
-    "shift_positions": False,
+    "shift_positions": True,
     "bias": PositionBias.DOWN,
-    "anchor_string": 6,
-    "anchor_fret": 3,
+    "anchor_string": None,
+    "anchor_fret": None,
     "max_fret_deviation": 6,
     "measures_per_line": 2,
     "rendered_tab": "",
     "last_error": "",
 }
-
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -99,24 +99,21 @@ def recompute():
         st.session_state.last_error = ""
         return
 
+    has_anchor = (
+        st.session_state.shift_positions
+        and st.session_state.anchor_string is not None
+        and st.session_state.anchor_fret is not None
+    )
+
     try:
         result = transform_tab(
             TransformRequest(
                 text=st.session_state.text,
                 instrument=st.session_state.instrument,
-                transpose_semitones=st.session_state.transpose_semitones,
                 shift_positions=st.session_state.shift_positions,
                 bias=st.session_state.bias,
-                anchor_string=(
-                    st.session_state.anchor_string
-                    if st.session_state.shift_positions
-                    else None
-                ),
-                anchor_fret=(
-                    st.session_state.anchor_fret
-                    if st.session_state.shift_positions
-                    else None
-                ),
+                anchor_string=st.session_state.anchor_string if has_anchor else None,
+                anchor_fret=st.session_state.anchor_fret if has_anchor else None,
                 max_fret_deviation=st.session_state.max_fret_deviation,
                 measures_per_line=st.session_state.measures_per_line,
             )
@@ -131,9 +128,19 @@ def recompute():
 def set_instrument(name: str):
     st.session_state.instrument = name
     string_count = INSTRUMENTS[name]["string_count"]
+    visible_frets = INSTRUMENTS[name]["visible_frets"]
 
-    if st.session_state.anchor_string > string_count:
+    if (
+        st.session_state.anchor_string is not None
+        and st.session_state.anchor_string > string_count
+    ):
         st.session_state.anchor_string = string_count
+
+    if (
+        st.session_state.anchor_fret is not None
+        and st.session_state.anchor_fret > visible_frets
+    ):
+        st.session_state.anchor_fret = visible_frets
 
     recompute()
 
@@ -141,6 +148,7 @@ def set_instrument(name: str):
 def render_instrument_selector():
     left_col, right_col = st.columns([1.3, 1])
     with left_col:
+        st.markdown("<div style='height: 1.8rem;'></div>", unsafe_allow_html=True)
         st.markdown("## Welcome to Alt-Tabs")
         st.markdown(
             "Pick your instrument, paste your tabs, and select the position "
@@ -194,9 +202,12 @@ st.text_area(
 
 cfg = INSTRUMENTS[st.session_state.instrument]
 
-if st.session_state.instrument == "bass" and st.session_state.anchor_string > 4:
+if (
+    st.session_state.instrument == "bass"
+    and st.session_state.anchor_string is not None
+    and st.session_state.anchor_string > 4
+):
     st.session_state.anchor_string = 4
-
 st.subheader("Target position")
 
 component_result = fretboard_selector(
@@ -234,44 +245,52 @@ if component_result is not None:
         st.session_state.shift_positions = True
         clicked_new_position = True
 
-col1, col2, col3 = st.columns(3)
+# col1,
 
-with col1:
-    st.number_input(
-        "Transpose (semitones)",
-        min_value=-24,
-        max_value=24,
-        step=1,
-        key="transpose_semitones",
-        on_change=recompute,
-    )
-
-with col2:
-    st.checkbox(
-        "Shift positions",
-        key="shift_positions",
-        on_change=recompute,
-    )
-
-with col3:
-    st.selectbox(
-        "Bias",
-        [PositionBias.DOWN, PositionBias.CENTERED, PositionBias.UP],
-        key="bias",
-        format_func=lambda x: x.value,
-        on_change=recompute,
-    )
-
+# with col1:
+#     st.number_input(
+#         "Transpose (semitones)",
+#         min_value=-24,
+#         max_value=24,
+#         step=1,
+#         key="transpose_semitones",
+#         on_change=recompute,
+#     )
+#
+# with col2:
+#     st.checkbox(
+#         "Shift positions",
+#         key="shift_positions",
+#         on_change=recompute,
+#     )
+st.selectbox(
+    "Bias",
+    [PositionBias.DOWN, PositionBias.CENTERED, PositionBias.UP],
+    key="bias",
+    width=200,
+    format_func=lambda x: x.value,
+    on_change=recompute,
+)
 if clicked_new_position:
     recompute()
 
-st.caption(
-    f"Selected target: string {st.session_state.anchor_string}, fret {st.session_state.anchor_fret}"
-)
+if st.session_state.anchor_string is None or st.session_state.anchor_fret is None:
+    st.caption("Selected target: none")
+else:
+    st.caption(
+        f"Selected target: string {st.session_state.anchor_string}, fret {
+            st.session_state.anchor_fret
+        }, note {
+            NoteName.from_pitch(
+                presets[st.session_state.instrument]
+                .note_at(st.session_state.anchor_string, st.session_state.anchor_fret)
+                .pitch
+            )
+        }"
+    )
 
 if st.session_state.last_error:
     st.error(st.session_state.last_error)
 elif st.session_state.rendered_tab:
     st.subheader("Output")
     st.code(st.session_state.rendered_tab)
-

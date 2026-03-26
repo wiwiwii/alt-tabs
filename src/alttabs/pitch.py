@@ -107,3 +107,10 @@ class NoteName:
         letter, accidental = cls.PITCH_CLASS_TO_NAME[pitch_class]
         return cls(octave=octave, letter=letter, accidental=accidental)
 
+    def __str__(self) -> str:
+        accidental = ""
+        if self.accidental == -1:
+            accidental = "b"
+        elif self.accidental == 1:
+            accidental = "#"
+        return f"{self.letter}{accidental}{self.octave}"
