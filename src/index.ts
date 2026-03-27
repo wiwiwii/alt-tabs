@@ -41,8 +41,9 @@ type ComponentData = {
 };
 
 type FrontendState = {
-  selectedString: number;
-  selectedFret: number;
+  selectedPosition: Cell | null;
+  selectedString: number | null;
+  selectedFret: number | null;
 };
 
 type Cell = {
@@ -67,7 +68,7 @@ type Geometry = {
 };
 
 type InstanceState = {
-  selected: Cell;
+  selected: Cell | null;
   hovered: Cell | null;
 };
 
@@ -348,37 +349,49 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
 
   const geometry = geometryForInstrument(data);
 
-  const initialSelected: Cell = {
-    stringNumber: data.selectedString ?? data.stringCount,
-    fret: data.selectedFret ?? 3,
-  };
+  const incomingSelected =
+    data.selectedString != null && data.selectedFret != null
+      ? {
+          stringNumber: data.selectedString,
+          fret: data.selectedFret,
+        }
+      : null;
 
   if (!instances.has(parentElement)) {
     instances.set(parentElement, {
-      selected: initialSelected,
+      selected: incomingSelected,
       hovered: null,
     });
   }
 
   const instance = instances.get(parentElement)!;
 
-  instance.selected = {
-    stringNumber: data.selectedString ?? instance.selected.stringNumber,
-    fret: data.selectedFret ?? instance.selected.fret,
-  };
+  instance.selected = incomingSelected;
 
   const hoverMarkup = instance.hovered
     ? renderCellOverlay(geometry, instance.hovered, "hover-cell")
     : "";
-  const selectedMarkup = renderCellOverlay(
-    geometry,
-    instance.selected,
-    "selected-cell",
-  );
-  const { x: markerX, y: markerY } = markerPosition(
-    geometry,
-    instance.selected,
-  );
+  const selectedMarkup = instance.selected
+    ? renderCellOverlay(geometry, instance.selected, "selected-cell")
+    : "";
+  const marker = instance.selected
+    ? markerPosition(geometry, instance.selected)
+    : null;
+  const badgeMarkup = instance.selected
+    ? `<div class="badge">String ${instance.selected.stringNumber} · Fret ${instance.selected.fret}</div>`
+    : `<div class="badge">No target selected</div>`;
+  const markerMarkup = marker
+    ? `
+        <circle cx="${marker.x}" cy="${marker.y}" r="11" class="selected-marker-halo" />
+        <circle
+          cx="${marker.x}"
+          cy="${marker.y}"
+          r="7.5"
+          class="selected-marker"
+          style="fill:${data.theme.markerColor}; stroke:${data.theme.markerStroke}"
+        />
+      `
+    : "";
 
   const fretLines = Array.from(
     { length: geometry.visibleFrets + 1 },
@@ -434,7 +447,7 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
 
   root.innerHTML = `
     <div class="fretboard-shell">
-      <div class="badge">String ${instance.selected.stringNumber} · Fret ${instance.selected.fret}</div>
+      ${badgeMarkup}
       <svg
         viewBox="0 0 ${geometry.viewBoxWidth} ${geometry.viewBoxHeight}"
         class="fretboard"
@@ -491,14 +504,7 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
           stroke-linecap="round"
         />
 
-        <circle cx="${markerX}" cy="${markerY}" r="11" class="selected-marker-halo" />
-        <circle
-          cx="${markerX}"
-          cy="${markerY}"
-          r="7.5"
-          class="selected-marker"
-          style="fill:${data.theme.markerColor}; stroke:${data.theme.markerStroke}"
-        />
+        ${markerMarkup}
 
         ${stringLabels(geometry)}
         ${fretLabels(geometry)}
@@ -528,12 +534,14 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
     };
 
     const onClick = () => {
-      instance.selected = {
+      const selected: Cell = {
         stringNumber: Number(cell.dataset.string),
         fret: Number(cell.dataset.fret),
       };
-      setStateValue("selectedString", instance.selected.stringNumber);
-      setStateValue("selectedFret", instance.selected.fret);
+      instance.selected = selected;
+      setStateValue("selectedPosition", selected);
+      setStateValue("selectedString", selected.stringNumber);
+      setStateValue("selectedFret", selected.fret);
       root!.dispatchEvent(new CustomEvent("rerender"));
     };
 

@@ -79,25 +79,34 @@ class TabParser:
         self._validate_measure_structure(string_lines)
         events = self._extract_events(string_lines)
 
+        measure_count = len(string_lines[0].measures)
+
         return ParsedTab(
             string_lines=string_lines,
             events=events,
-            measure_count=len(string_lines[0].measures),
+            measure_count=measure_count,
         )
 
     def _parse_string_lines(self, raw_lines: list[str]) -> list[TabStringLine]:
+        parsed = []
         expected_strings = [spec.number for spec in self.fretboard.tuning.strings]
+
         if len(raw_lines) != len(expected_strings):
             raise TabParseError(
                 f"Expected {len(expected_strings)} lines for this instrument, got {len(raw_lines)}"
             )
 
-        parsed = []
         for idx, raw in enumerate(raw_lines):
-            string_number, label, content = self._split_label_and_content(raw, idx)
+            string_number, label, content = self._split_label_and_content(
+                raw, fallback_index=idx
+            )
             measures = self._split_measures(content)
             parsed.append(
-                TabStringLine(string=string_number, measures=measures, raw_label=label)
+                TabStringLine(
+                    string=string_number,
+                    measures=measures,
+                    raw_label=label,
+                )
             )
 
         parsed_numbers = [line.string for line in parsed]
@@ -120,7 +129,8 @@ class TabParser:
             return string_number, label, "|" + after_bar
 
         tuning_order = [spec.number for spec in self.fretboard.tuning.strings]
-        return tuning_order[fallback_index], None, "|" + after_bar
+        string_number = tuning_order[fallback_index]
+        return string_number, None, "|" + after_bar
 
     def _split_measures(self, content: str) -> list[str]:
         if not content.startswith("|"):
@@ -129,7 +139,6 @@ class TabParser:
             raise TabParseError(f"Measure content must end with '|': {content}")
 
         parts = content.split("|")
-        # Example: "|--3--|--0--|" -> ["", "--3--", "--0--", ""]
         if parts[0] != "" or parts[-1] != "":
             raise TabParseError(f"Malformed measure bars: {content}")
 
@@ -141,17 +150,44 @@ class TabParser:
 
     def _validate_measure_structure(self, string_lines: list[TabStringLine]):
         expected_count = len(string_lines[0].measures)
-        expected_widths = [len(m) for m in string_lines[0].measures]
+        expected_widths = [len(measure) for measure in string_lines[0].measures]
 
         for line in string_lines:
             if len(line.measures) != expected_count:
                 raise TabParseError("All strings must have the same number of measures")
 
-            widths = [len(m) for m in line.measures]
+            widths = [len(measure) for measure in line.measures]
             if widths != expected_widths:
                 raise TabParseError(
                     "Corresponding measures must have identical widths across strings"
                 )
+
+    def _string_number_from_label(self, label: str, raw: str) -> int:
+        tuning_numbers = [spec.number for spec in self.fretboard.tuning.strings]
+
+        if label == "e":
+            if 1 in tuning_numbers:
+                return 1
+            raise TabParseError(f"Label '{label}' not valid for this instrument: {raw}")
+
+        if label in ("B", "G", "D", "A"):
+            mapping = {"B": 2, "G": 3, "D": 4, "A": 5}
+            string_number = mapping[label]
+            if string_number not in tuning_numbers:
+                raise TabParseError(
+                    f"Label '{label}' not valid for this instrument: {raw}"
+                )
+            return string_number
+
+        if label == "E":
+            if len(tuning_numbers) == 6:
+                return 6
+            if len(tuning_numbers) == 4:
+                return 4
+
+        raise TabParseError(
+            f"Unsupported or ambiguous string label '{label}' in line: {raw}"
+        )
 
     def _extract_events(self, string_lines: list[TabStringLine]) -> list[TabEvent]:
         events_by_key: dict[tuple[int, int], list[PlayedNote]] = {}
@@ -159,6 +195,7 @@ class TabParser:
         for line in string_lines:
             for measure_index, measure in enumerate(line.measures):
                 col = 0
+
                 while col < len(measure):
                     ch = measure[col]
 
@@ -194,33 +231,6 @@ class TabParser:
             )
             for measure_index, at_column in keys
         ]
-
-    def _string_number_from_label(self, label: str, raw: str) -> int:
-        tuning_numbers = [spec.number for spec in self.fretboard.tuning.strings]
-
-        if label == "e":
-            if 1 in tuning_numbers:
-                return 1
-            raise TabParseError(f"Label '{label}' not valid for this instrument: {raw}")
-
-        if label in ("B", "G", "D", "A"):
-            mapping = {"B": 2, "G": 3, "D": 4, "A": 5}
-            string_number = mapping[label]
-            if string_number not in tuning_numbers:
-                raise TabParseError(
-                    f"Label '{label}' not valid for this instrument: {raw}"
-                )
-            return string_number
-
-        if label == "E":
-            if len(tuning_numbers) == 6:
-                return 6
-            if len(tuning_numbers) == 4:
-                return 4
-
-        raise TabParseError(
-            f"Unsupported or ambiguous string label '{label}' in line: {raw}"
-        )
 
 
 class TabRenderer:
@@ -265,11 +275,7 @@ class TabRenderer:
 
         for chunk_idx, chunk in enumerate(chunks):
             for string in ordered_strings:
-                parts = []
-                for measure in chunk:
-                    parts.append("|" + measure[string] + "|")
-
-                content = "".join(parts)
+                content = "|" + "|".join(measure[string] for measure in chunk) + "|"
 
                 if self.show_labels:
                     line = f"{self._string_label(string)}{content}"
@@ -278,7 +284,6 @@ class TabRenderer:
 
                 lines.append(line)
 
-            # blank line between systems (but not after last)
             if chunk_idx < len(chunks) - 1:
                 lines.append("")
 
@@ -288,7 +293,6 @@ class TabRenderer:
         self, ordered_strings: list[int], events: list[RealizedEvent]
     ) -> dict[int, str]:
         if not events:
-            # Smallest valid empty measure: |-|
             return {string: "-" for string in ordered_strings}
 
         current_cursor = 1
@@ -308,10 +312,9 @@ class TabRenderer:
 
             start = max(1, event.at_column, current_cursor)
             placements.append((start, width, notes_by_string))
-            current_cursor = start + width
+            current_cursor = start + width + 1
 
         measure_width = max(start + width + 1 for start, width, _ in placements)
-        # +1 ensures at least one trailing dash before closing bar
 
         buffers = {string: ["-"] * measure_width for string in ordered_strings}
 
@@ -325,7 +328,6 @@ class TabRenderer:
                 for i, ch in enumerate(fret_text):
                     buffers[string][start + i] = ch
 
-        # First and last chars remain '-'
         for string in ordered_strings:
             buffers[string][0] = "-"
             buffers[string][-1] = "-"

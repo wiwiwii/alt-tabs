@@ -51,6 +51,10 @@ def transform_tab(request: TransformRequest) -> TransformResult:
 
     parsed_blocks = parse_tab_text(request.text, fretboard)
     events = to_realized_events(parsed_blocks)
+
+    if not events:
+        raise PipelineError("No notes were found in the tab.")
+
     first_pitch = events[0].notes[0].pitch
     # if request.anchor_string is not None and request.anchor_fret is not None:
     #     target_pitch = fretboard.note_at(
@@ -68,16 +72,10 @@ def transform_tab(request: TransformRequest) -> TransformResult:
     #     )
 
     if request.shift_positions:
-        if not events:
-            raise PipelineError("Cannot shift positions on an empty event stream")
         if request.anchor_string is not None and request.anchor_fret is not None:
             target_pitch = fretboard.note_at(
                 request.anchor_string, request.anchor_fret
             ).pitch
-            print(
-                f"First pitch: {first_pitch.value}, target pitch: {target_pitch.value}"
-            )
-            print(f"Transposition: {target_pitch.value - first_pitch.value}")
             events = transpose_monophonic_events(
                 events, fretboard, Interval(target_pitch.value - first_pitch.value)
             )
@@ -101,6 +99,7 @@ def transform_tab(request: TransformRequest) -> TransformResult:
                 prefer_open_strings=request.prefer_open_strings,
             ),
         )
+
     renderer = TabRenderer(fretboard)
     rendered = renderer.render(
         events,

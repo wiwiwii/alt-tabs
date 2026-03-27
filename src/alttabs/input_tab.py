@@ -15,7 +15,7 @@ class InputTabError(Exception):
 @dataclass(frozen=True)
 class RawTabBlock:
     """
-    One contiguous 6-line tab block before parsing.
+    One contiguous tab block before parsing.
 
     repeat:
         Number of times the block should be repeated.
@@ -56,12 +56,13 @@ def parse_tab_text(text: str, fretboard: FretBoard) -> list[ParsedTabBlock]:
     Parse a large raw tab text into independently parsed blocks.
 
     This function:
-    - groups 6 string lines into blocks
+    - groups string lines into blocks sized for the selected instrument
     - attaches a following `xN` repeat marker to the preceding block
     - sanitizes unsupported symbols for the current narrow TabParser
     """
     parser = TabParser(fretboard)
-    raw_blocks = split_raw_tab_blocks(text)
+    expected_string_count = len(fretboard.tuning.strings)
+    raw_blocks = split_raw_tab_blocks(text, expected_string_count)
 
     parsed_blocks: list[ParsedTabBlock] = []
     for raw_block in raw_blocks:
@@ -71,23 +72,15 @@ def parse_tab_text(text: str, fretboard: FretBoard) -> list[ParsedTabBlock]:
     return parsed_blocks
 
 
-def split_raw_tab_blocks(text: str) -> list[RawTabBlock]:
+def split_raw_tab_blocks(text: str, expected_string_count: int) -> list[RawTabBlock]:
     """
-    Split a large tab dump into 6-line blocks, optionally followed by `xN`.
-
-    Expected shape:
-        [6 tab lines]
-        [blank lines optional]
-        x2           # optional repeat marker for previous block
-        [blank lines optional]
-        [next 6 tab lines]
+    Split a large tab dump into instrument-sized blocks, optionally followed by `xN`.
     """
     raw_lines = text.splitlines()
     i = 0
     blocks: list[RawTabBlock] = []
 
     while i < len(raw_lines):
-        # Skip blank lines between blocks
         while i < len(raw_lines) and not raw_lines[i].strip():
             i += 1
 
@@ -97,7 +90,7 @@ def split_raw_tab_blocks(text: str) -> list[RawTabBlock]:
         block_lines: list[str] = []
         start_i = i
 
-        while i < len(raw_lines) and len(block_lines) < 6:
+        while i < len(raw_lines) and len(block_lines) < expected_string_count:
             line = raw_lines[i]
             if line.strip():
                 block_lines.append(line.rstrip())
@@ -106,18 +99,18 @@ def split_raw_tab_blocks(text: str) -> list[RawTabBlock]:
         if not block_lines:
             continue
 
-        if len(block_lines) != 6:
+        if len(block_lines) != expected_string_count:
             raise InputTabError(
-                f"Incomplete tab block starting near line {start_i + 1}: expected 6 non-empty lines, got {len(block_lines)}"
+                "Incomplete tab block starting near line "
+                f"{start_i + 1}: expected {expected_string_count} non-empty lines, "
+                f"got {len(block_lines)}"
             )
 
         repeat = 1
 
-        # Skip blanks after the 6 lines
         while i < len(raw_lines) and not raw_lines[i].strip():
             i += 1
 
-        # Optional repeat marker like x2
         if i < len(raw_lines):
             match = re.fullmatch(r"x(\d+)", raw_lines[i].strip(), flags=re.IGNORECASE)
             if match:
@@ -159,12 +152,6 @@ def sanitize_tab_line(line: str) -> str:
     label = before_bar
     content = "|" + after_bar
 
-    # Replace unsupported symbols with dashes, but keep:
-    # - digits
-    # - bars
-    # - dashes
-    #
-    # Everything else in the content area becomes '-'.
     sanitized_content_chars: list[str] = []
     for ch in content:
         if ch.isdigit() or ch in {"|", "-"}:
