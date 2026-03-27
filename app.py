@@ -117,14 +117,16 @@ INSTRUMENTS = {
 def humanize_error(message: str, instrument: str) -> str:
     lower = message.lower().strip()
 
-    if "expected 6 non-empty lines" in lower and instrument == "bass":
-        return "Bass input must contain 4 string lines per block. This one does not match that format."
-    if "expected 4 non-empty lines" in lower and instrument != "bass":
-        return "Guitar input must contain 6 string lines per block. This one does not match that format."
+    if "expected 4 non-empty lines" in lower and instrument == "bass":
+        return "This looks like a guitar tab, but the selected instrument is bass. Bass tabs must use 4 strings per block."
+    if "expected 6 non-empty lines" in lower and instrument != "bass":
+        return "This looks like a bass tab, but the selected instrument is a guitar. Guitar tabs must use 6 strings per block."
+
     if "expected 4 lines for this instrument" in lower and instrument != "bass":
         return "This looks like a bass tab, but the selected instrument is a guitar."
     if "expected 6 lines for this instrument" in lower and instrument == "bass":
         return "This looks like a guitar tab, but the selected instrument is bass."
+
     if "invalid tab line without '|'" in lower or "missing '|' separator" in lower:
         return "Invalid tab format. Each string line must contain bar separators like |--0--|."
     if (
