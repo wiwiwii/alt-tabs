@@ -2,7 +2,7 @@ from pathlib import Path
 
 import streamlit as st
 
-DIST_DIR = Path(__file__).resolve().parent.parent / "dist"
+DIST_DIR = Path(__file__).resolve().parent.parent.parent / "dist"
 JS = (DIST_DIR / "index.js").read_text(encoding="utf-8")
 
 fretboard_component = st.components.v2.component(
@@ -32,8 +32,6 @@ def fretboard_selector(
         key=key,
         default={
             "selectedPosition": selected_position,
-            "selectedString": selected_string,
-            "selectedFret": selected_fret,
         },
         data={
             "instrument": instrument,
@@ -44,6 +42,5 @@ def fretboard_selector(
             "theme": theme,
         },
         on_selectedPosition_change=lambda: None,
-        on_selectedString_change=lambda: None,
-        on_selectedFret_change=lambda: None,
     )
+

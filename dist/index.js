@@ -1,25 +1,25 @@
-const R = ":root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0}.component-root,.fretboard-shell{width:100%}.badge{margin-bottom:8px;display:inline-block;padding:8px 12px;border-radius:999px;background:#ffffff0f;border:1px solid rgba(255,255,255,.08);color:var(--st-text-color, #f2f2f2);font-size:14px}.fretboard{width:100%;display:block}.fret-line{stroke-opacity:.86;stroke-linecap:round;stroke-width:2.5}.nut-line{stroke-opacity:0}.string-line{stroke-linecap:round;opacity:.96}.inlay{opacity:.92}.hover-cell{fill:#fff4d624;stroke:#fff4d638;stroke-width:1}.selected-cell{fill:#d8b36a1c;stroke:#ffeec66b;stroke-width:1.2}.selected-marker-halo{fill:#fff7e826}.selected-marker{stroke-width:2}.hit-cell{fill:transparent;cursor:pointer}.fret-label,.string-label{fill:#d8d0c2;font-size:14px;-webkit-user-select:none;user-select:none}.fret-label{text-anchor:middle}";
-function M(t) {
+const S = ":root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0}.component-root,.fretboard-shell{width:100%}.badge{margin-bottom:8px;display:inline-block;padding:8px 12px;border-radius:999px;background:#ffffff0f;border:1px solid rgba(255,255,255,.08);color:var(--st-text-color, #f2f2f2);font-size:14px}.fretboard{width:100%;display:block}.fret-line{stroke-opacity:.86;stroke-linecap:round;stroke-width:2.5}.nut-line{stroke-opacity:0}.string-line{stroke-linecap:round;opacity:.96}.inlay{opacity:.92}.hover-cell{fill:#fff4d624;stroke:#fff4d638;stroke-width:1}.selected-cell{fill:#d8b36a1c;stroke:#ffeec66b;stroke-width:1.2}.selected-marker-halo{fill:#fff7e826}.selected-marker{stroke-width:2}.hit-cell{fill:transparent;cursor:pointer}.fret-label,.string-label{fill:#d8d0c2;font-size:14px;-webkit-user-select:none;user-select:none}.fret-label{text-anchor:middle}";
+function Y(t) {
   if (t.querySelector("style[data-alt-tabs-fretboard]"))
     return;
-  const e = document.createElement("style");
-  e.setAttribute("data-alt-tabs-fretboard", "true"), e.textContent = R, t.appendChild(e);
+  const n = document.createElement("style");
+  n.setAttribute("data-alt-tabs-fretboard", "true"), n.textContent = S, t.appendChild(n);
 }
-const k = /* @__PURE__ */ new WeakMap();
-function g(t) {
-  const e = Array.from(
+const L = /* @__PURE__ */ new WeakMap();
+function H(t) {
+  const n = Array.from(
     { length: t.visibleFrets + 2 },
-    (n, d) => d === 0 ? 0 : 1 - Math.pow(2, -d / 12)
-  ), o = e[e.length - 1], s = t.boardRight - t.boardLeft, r = e.map(
-    (n) => t.boardLeft + n / o * s
+    (e, a) => a === 0 ? 0 : 1 - Math.pow(2, -a / 12)
+  ), o = n[n.length - 1], s = t.boardRight - t.boardLeft, r = n.map(
+    (e) => t.boardLeft + e / o * s
   );
   return {
     ...t,
     fretBoundaries: r
   };
 }
-function j(t) {
-  return t.instrument === "bass" ? g({
+function A(t) {
+  return t.instrument === "bass" ? H({
     viewBoxWidth: 1600,
     viewBoxHeight: 320,
     centerY: 170,
@@ -32,7 +32,7 @@ function j(t) {
     edgePaddingNut: 10,
     edgePaddingBody: 14,
     stringCount: t.stringCount
-  }) : g({
+  }) : H({
     viewBoxWidth: 1600,
     viewBoxHeight: 320,
     centerY: 170,
@@ -40,168 +40,176 @@ function j(t) {
     boardRight: 1540,
     openAreaLeft: 56,
     visibleFrets: t.visibleFrets,
-    nutHalfWidth: 70,
-    bodyHalfWidth: 96,
+    nutHalfWidth: 72,
+    bodyHalfWidth: 102,
     edgePaddingNut: 10,
-    edgePaddingBody: 14,
+    edgePaddingBody: 16,
     stringCount: t.stringCount
   });
 }
-function c(t, e, o) {
-  const s = (o - t.boardLeft) / (t.boardRight - t.boardLeft), r = Math.max(0, Math.min(1, s)), n = t.centerY - t.nutHalfWidth + t.edgePaddingNut, d = t.centerY + t.nutHalfWidth - t.edgePaddingNut, a = t.centerY - t.bodyHalfWidth + t.edgePaddingBody, $ = t.centerY + t.bodyHalfWidth - t.edgePaddingBody, v = t.stringCount === 1 ? 0 : (e - 1) / (t.stringCount - 1), u = n + v * (d - n), x = a + v * ($ - a);
-  return u + r * (x - u);
+function c(t, n, o) {
+  const s = (o - t.boardLeft) / (t.boardRight - t.boardLeft), r = t.nutHalfWidth + s * (t.bodyHalfWidth - t.nutHalfWidth);
+  if (t.stringCount === 1)
+    return t.centerY;
+  const e = (n - 1) / (t.stringCount - 1);
+  return t.centerY - r + e * (r * 2);
 }
-function b(t, e, o, s) {
-  return (c(t, e, s) + c(t, o, s)) / 2;
+function j(t, n) {
+  const o = t.stringCount === 4 ? 4.6 : 3.8, s = t.stringCount === 4 ? 2.2 : 1.6;
+  if (t.stringCount === 1)
+    return o;
+  const r = (n - 1) / (t.stringCount - 1);
+  return s + r * (o - s);
 }
-function G(t, e) {
-  return t.stringCount === 4 ? [3.6, 4.4, 5.3, 6.5][e - 1] : [1.3, 1.6, 1.9, 2.3, 2.9, 3.6][e - 1];
-}
-function T(t) {
-  const e = t.boardLeft, o = t.boardRight, s = t.centerY - t.nutHalfWidth, r = t.centerY + t.nutHalfWidth, n = t.centerY - t.bodyHalfWidth, d = t.centerY + t.bodyHalfWidth;
+function G(t) {
+  const n = t.boardLeft, o = t.boardRight, s = t.centerY, r = s - t.nutHalfWidth - t.edgePaddingNut, e = s + t.nutHalfWidth + t.edgePaddingNut, a = s - t.bodyHalfWidth - t.edgePaddingBody, l = s + t.bodyHalfWidth + t.edgePaddingBody;
   return [
-    `M ${e} ${s}`,
-    `L ${o} ${n}`,
-    `L ${o} ${d}`,
-    `L ${e} ${r}`,
+    `M ${n} ${r}`,
+    `L ${o} ${a}`,
+    `L ${o} ${l}`,
+    `L ${n} ${e}`,
     "Z"
   ].join(" ");
 }
-function Y(t, e) {
-  const o = e === 1 ? c(t, 1, t.boardLeft) - 12 : b(t, e - 1, e, t.boardLeft), s = e === t.stringCount ? c(t, t.stringCount, t.boardLeft) + 12 : b(t, e, e + 1, t.boardLeft);
+function E(t, n) {
+  const o = t.openAreaLeft, s = t.boardLeft, r = 10, e = c(t, n, o), a = c(t, n, s), l = n > 1 ? c(t, n - 1, s) : a - 22, u = n < t.stringCount ? c(t, n + 1, s) : a + 22, h = (l + a) / 2, b = (a + u) / 2;
   return [
-    `${t.openAreaLeft},${o}`,
-    `${t.boardLeft},${o}`,
-    `${t.boardLeft},${s}`,
-    `${t.openAreaLeft},${s}`
+    `${o},${e - r}`,
+    `${s},${h}`,
+    `${s},${b}`,
+    `${o},${e + r}`
   ].join(" ");
 }
-function E(t, e, o) {
-  const s = t.fretBoundaries[o - 1], r = t.fretBoundaries[o], n = e === 1 ? c(t, 1, s) - 12 : b(t, e - 1, e, s), d = e === 1 ? c(t, 1, r) - 12 : b(t, e - 1, e, r), a = e === t.stringCount ? c(t, t.stringCount, s) + 12 : b(t, e, e + 1, s), $ = e === t.stringCount ? c(t, t.stringCount, r) + 12 : b(t, e, e + 1, r);
+function F(t, n, o) {
+  const s = t.fretBoundaries[o - 1], r = t.fretBoundaries[o], e = c(t, n, s), a = c(t, n, r), l = n > 1 ? c(t, n - 1, s) : e - 22, u = n < t.stringCount ? c(t, n + 1, s) : e + 22, h = n > 1 ? c(t, n - 1, r) : a - 22, b = n < t.stringCount ? c(t, n + 1, r) : a + 22, v = (l + e) / 2, x = (e + u) / 2, g = (h + a) / 2, $ = (a + b) / 2;
   return [
-    `${s},${n}`,
-    `${r},${d}`,
+    `${s},${v}`,
+    `${r},${g}`,
     `${r},${$}`,
-    `${s},${a}`
+    `${s},${x}`
   ].join(" ");
 }
-function _(t, e) {
-  if (e.fret === 0)
-    return { x: (t.openAreaLeft + t.boardLeft) / 2, y: c(t, e.stringNumber, t.boardLeft) };
-  const o = t.fretBoundaries[e.fret - 1], s = t.fretBoundaries[e.fret], r = (o + s) / 2;
-  return { x: r, y: c(t, e.stringNumber, r) };
+function M(t, n) {
+  const o = n.fret === 0 ? (t.openAreaLeft + t.boardLeft) / 2 : (t.fretBoundaries[n.fret - 1] + t.fretBoundaries[n.fret]) / 2;
+  return { x: o, y: c(t, n.stringNumber, o) };
 }
-function q(t, e) {
+function m(t, n) {
   const o = [3, 5, 7, 9], s = [12], r = [];
-  for (const n of o) {
-    if (n > t.visibleFrets) continue;
-    const d = (t.fretBoundaries[n - 1] + t.fretBoundaries[n]) / 2;
+  for (const e of o) {
+    if (e > t.visibleFrets) continue;
+    const a = (t.fretBoundaries[e - 1] + t.fretBoundaries[e]) / 2;
     r.push(
-      `<circle cx="${d}" cy="${t.centerY}" r="7" class="inlay" style="fill:${e.inlayColor}" />`
+      `<circle cx="${a}" cy="${t.centerY}" r="7" class="inlay" style="fill:${n.inlayColor}" />`
     );
   }
-  for (const n of s) {
-    if (n > t.visibleFrets) continue;
-    const d = (t.fretBoundaries[n - 1] + t.fretBoundaries[n]) / 2;
+  for (const e of s) {
+    if (e > t.visibleFrets) continue;
+    const a = (t.fretBoundaries[e - 1] + t.fretBoundaries[e]) / 2;
     r.push(
-      `<circle cx="${d}" cy="${t.centerY - 22}" r="6.5" class="inlay" style="fill:${e.inlayColor}" />`
+      `<circle cx="${a}" cy="${t.centerY - 22}" r="6.5" class="inlay" style="fill:${n.inlayColor}" />`
     ), r.push(
-      `<circle cx="${d}" cy="${t.centerY + 22}" r="6.5" class="inlay" style="fill:${e.inlayColor}" />`
+      `<circle cx="${a}" cy="${t.centerY + 22}" r="6.5" class="inlay" style="fill:${n.inlayColor}" />`
     );
   }
   return r.join(`
 `);
 }
-function z(t) {
-  const e = [];
-  e.push(
+function N(t) {
+  const n = [];
+  n.push(
     `<text x="${(t.openAreaLeft + t.boardLeft) / 2}" y="296" class="fret-label">0</text>`
   );
   for (let o = 1; o <= t.visibleFrets; o += 1) {
     const s = (t.fretBoundaries[o - 1] + t.fretBoundaries[o]) / 2;
-    e.push(`<text x="${s}" y="296" class="fret-label">${o}</text>`);
+    n.push(`<text x="${s}" y="296" class="fret-label">${o}</text>`);
   }
-  return e.join(`
+  return n.join(`
 `);
 }
-function N(t) {
-  const e = [];
+function _(t) {
+  const n = [];
   for (let o = 1; o <= t.stringCount; o += 1) {
     const s = c(t, o, t.boardLeft);
-    e.push(`<text x="26" y="${s + 4}" class="string-label">${o}</text>`);
+    n.push(`<text x="26" y="${s + 4}" class="string-label">${o}</text>`);
   }
-  return e.join(`
+  return n.join(`
 `);
 }
-function W(t, e, o) {
-  return `<polygon points="${e.fret === 0 ? Y(t, e.stringNumber) : E(t, e.stringNumber, e.fret)}" class="${o}" />`;
+function W(t, n, o) {
+  return `<polygon points="${n.fret === 0 ? E(t, n.stringNumber) : F(t, n.stringNumber, n.fret)}" class="${o}" />`;
 }
-const D = (t) => {
-  const { parentElement: e, data: o, setStateValue: s } = t;
-  M(e);
-  let r = e.querySelector(".component-root");
-  r || (r = document.createElement("div"), r.className = "component-root", e.appendChild(r));
-  const n = j(o), d = o.selectedString != null && o.selectedFret != null ? {
+const I = (t) => {
+  const { parentElement: n, data: o, setStateValue: s } = t;
+  Y(n);
+  let r = n.querySelector(".component-root");
+  r || (r = document.createElement("div"), r.className = "component-root", n.appendChild(r));
+  const e = A(o), a = o.selectedString != null && o.selectedFret != null ? {
     stringNumber: o.selectedString,
     fret: o.selectedFret
   } : null;
-  k.has(e) || k.set(e, {
-    selected: d,
+  L.has(n) || L.set(n, {
+    selected: a,
     hovered: null
   });
-  const a = k.get(e);
-  a.selected = d;
-  const $ = a.hovered ? W(n, a.hovered, "hover-cell") : "", v = a.selected ? W(n, a.selected, "selected-cell") : "", u = a.selected ? _(n, a.selected) : null, x = a.selected ? `<div class="badge">String ${a.selected.stringNumber} · Fret ${a.selected.fret}</div>` : '<div class="badge">No target selected</div>', F = u ? `
-        <circle cx="${u.x}" cy="${u.y}" r="11" class="selected-marker-halo" />
-        <circle
-          cx="${u.x}"
-          cy="${u.y}"
-          r="7.5"
-          class="selected-marker"
-          style="fill:${o.theme.markerColor}; stroke:${o.theme.markerStroke}"
-        />
-      ` : "", y = Array.from(
-    { length: n.visibleFrets + 1 },
-    (i, l) => {
-      const f = n.fretBoundaries[l], p = l / n.visibleFrets, h = n.centerY - n.nutHalfWidth + p * (n.nutHalfWidth - n.bodyHalfWidth), S = n.centerY + n.nutHalfWidth + p * (n.bodyHalfWidth - n.nutHalfWidth);
+  const l = L.get(n);
+  l.selected = a;
+  const u = l.hovered ? W(e, l.hovered, "hover-cell") : "", h = l.selected != null ? W(e, l.selected, "selected-cell") : "", b = l.selected != null ? (() => {
+    const { x: i, y: d } = M(
+      e,
+      l.selected
+    );
+    return `
+            <circle cx="${i}" cy="${d}" r="11" class="selected-marker-halo" />
+            <circle
+              cx="${i}"
+              cy="${d}"
+              r="7.5"
+              class="selected-marker"
+              style="fill:${o.theme.markerColor}; stroke:${o.theme.markerStroke}"
+            />
+          `;
+  })() : "", v = l.selected != null ? `<div class="badge">String ${l.selected.stringNumber} · Fret ${l.selected.fret}</div>` : '<div class="badge">No target selected</div>', x = Array.from(
+    { length: e.visibleFrets + 1 },
+    (i, d) => {
+      const f = e.fretBoundaries[d], p = d / e.visibleFrets, k = e.centerY - e.nutHalfWidth + p * (e.nutHalfWidth - e.bodyHalfWidth), P = e.centerY + e.nutHalfWidth + p * (e.bodyHalfWidth - e.nutHalfWidth);
       return `<line
         x1="${f}"
-        y1="${h}"
+        y1="${k}"
         x2="${f}"
-        y2="${S}"
-        class="fret-line ${l === 0 ? "nut-line" : ""}"
+        y2="${P}"
+        class="fret-line ${d === 0 ? "nut-line" : ""}"
         style="stroke:${o.theme.fretColor}"
       />`;
     }
   ).join(`
-`), A = Array.from({ length: n.stringCount }, (i, l) => {
-    const f = l + 1;
+`), g = Array.from({ length: e.stringCount }, (i, d) => {
+    const f = d + 1;
     return `
       <line
-        x1="${n.openAreaLeft}"
-        y1="${c(n, f, n.boardLeft)}"
-        x2="${n.boardRight}"
-        y2="${c(n, f, n.boardRight)}"
+        x1="${e.openAreaLeft}"
+        y1="${c(e, f, e.boardLeft)}"
+        x2="${e.boardRight}"
+        y2="${c(e, f, e.boardRight)}"
         class="string-line"
-        style="stroke:${o.theme.stringColor}; stroke-width:${G(n, f)}"
+        style="stroke:${o.theme.stringColor}; stroke-width:${j(e, f)}"
       />
     `;
   }).join(`
-`), L = [];
-  for (let i = 1; i <= n.stringCount; i += 1) {
-    L.push(
-      `<polygon points="${Y(n, i)}" class="hit-cell" data-string="${i}" data-fret="0" />`
+`), $ = [];
+  for (let i = 1; i <= e.stringCount; i += 1) {
+    $.push(
+      `<polygon points="${E(e, i)}" class="hit-cell" data-string="${i}" data-fret="0" />`
     );
-    for (let l = 1; l <= n.visibleFrets; l += 1)
-      L.push(
-        `<polygon points="${E(n, i, l)}" class="hit-cell" data-string="${i}" data-fret="${l}" />`
+    for (let d = 1; d <= e.visibleFrets; d += 1)
+      $.push(
+        `<polygon points="${F(e, i, d)}" class="hit-cell" data-string="${i}" data-fret="${d}" />`
       );
   }
   r.innerHTML = `
     <div class="fretboard-shell">
-      ${x}
+      ${v}
       <svg
-        viewBox="0 0 ${n.viewBoxWidth} ${n.viewBoxHeight}"
+        viewBox="0 0 ${e.viewBoxWidth} ${e.viewBoxHeight}"
         class="fretboard"
         role="img"
         aria-label="Fretboard selector"
@@ -226,70 +234,74 @@ const D = (t) => {
         <rect
           x="0"
           y="0"
-          width="${n.viewBoxWidth}"
-          height="${n.viewBoxHeight}"
+          width="${e.viewBoxWidth}"
+          height="${e.viewBoxHeight}"
           fill="url(#bg-gradient)"
           rx="24"
         />
 
         <path
-          d="${T(n)}"
+          d="${G(e)}"
           fill="url(#board-gradient)"
           stroke="${o.theme.boardEdge}"
           stroke-width="3"
           filter="url(#soft-shadow)"
         />
 
-        ${$}
-        ${v}
-        ${y}
-        ${q(n, o.theme)}
-        ${A}
+        ${u}
+        ${h}
+        ${x}
+        ${m(e, o.theme)}
+        ${g}
 
         <line
-          x1="${n.boardLeft}"
-          y1="${n.centerY - n.nutHalfWidth}"
-          x2="${n.boardLeft}"
-          y2="${n.centerY + n.nutHalfWidth}"
+          x1="${e.boardLeft}"
+          y1="${e.centerY - e.nutHalfWidth}"
+          x2="${e.boardLeft}"
+          y2="${e.centerY + e.nutHalfWidth}"
           stroke="${o.theme.nutColor}"
           stroke-width="8"
           stroke-linecap="round"
         />
 
-        ${F}
+        ${b}
 
-        ${N(n)}
-        ${z(n)}
-        ${L.join(`
+        ${_(e)}
+        ${N(e)}
+        ${$.join(`
 `)}
       </svg>
     </div>
   `;
-  const P = r.querySelectorAll(".hit-cell"), C = [], B = [], w = [];
-  P.forEach((i) => {
-    const l = () => {
-      a.hovered = {
+  const R = r.querySelectorAll(".hit-cell"), C = [], y = [], w = [];
+  R.forEach((i) => {
+    const d = () => {
+      l.hovered = {
         stringNumber: Number(i.dataset.string),
         fret: Number(i.dataset.fret)
       }, r.dispatchEvent(new CustomEvent("rerender"));
     }, f = () => {
-      a.hovered = null, r.dispatchEvent(new CustomEvent("rerender"));
+      l.hovered = null, r.dispatchEvent(new CustomEvent("rerender"));
     }, p = () => {
-      const h = {
+      console.log("CLICK", i.dataset.string, i.dataset.fret);
+      const k = {
         stringNumber: Number(i.dataset.string),
         fret: Number(i.dataset.fret)
       };
-      a.selected = h, s("selectedPosition", h), s("selectedString", h.stringNumber), s("selectedFret", h.fret), r.dispatchEvent(new CustomEvent("rerender"));
+      s("selectedPosition", k), console.log("SENDING", {
+        string: i.dataset.string,
+        fret: i.dataset.fret
+      });
     };
-    i.addEventListener("mouseenter", l), i.addEventListener("mouseleave", f), i.addEventListener("click", p), C.push(() => i.removeEventListener("mouseenter", l)), B.push(() => i.removeEventListener("mouseleave", f)), w.push(() => i.removeEventListener("click", p));
+    i.addEventListener("mouseenter", d), i.addEventListener("mouseleave", f), i.addEventListener("click", p), C.push(() => i.removeEventListener("mouseenter", d)), y.push(() => i.removeEventListener("mouseleave", f)), w.push(() => i.removeEventListener("click", p));
   });
-  const H = () => {
-    D(t);
+  const B = () => {
+    I(t);
   };
-  return r.addEventListener("rerender", H, { once: !0 }), () => {
-    C.forEach((i) => i()), B.forEach((i) => i()), w.forEach((i) => i()), r?.removeEventListener("rerender", H);
+  return r.addEventListener("rerender", B, { once: !0 }), () => {
+    C.forEach((i) => i()), y.forEach((i) => i()), w.forEach((i) => i()), r?.removeEventListener("rerender", B);
   };
 };
 export {
-  D as default
+  I as default
 };

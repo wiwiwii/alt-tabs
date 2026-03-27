@@ -2,20 +2,53 @@ from pathlib import Path
 
 import streamlit as st
 
+from alttabs.fretboard_component import fretboard_selector
 from alttabs.input_tab import InputTabError
 from alttabs.pipeline import PipelineError, TransformRequest, transform_tab
 from alttabs.position_shift import PositionBias
-from alttabs.score import TabParseError, TabRenderError
-from alttabs.tab import TabParseError as ParserTabParseError
-from alttabs.transform import TransformError
+from alttabs.score import TabRenderError
+from alttabs.tab import TabParseError
 from src.alttabs.instrument import presets
 from src.alttabs.pitch import NoteName
-from ui.fretboard_component import fretboard_selector
 
 st.set_page_config(page_title="Alt Tabs", layout="wide")
 
 ROOT = Path(__file__).resolve().parent
 ASSETS_DIR = ROOT / "assets"
+
+st.markdown(
+    """
+    <style>
+    div[data-testid="stTextArea"] textarea {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+            "Liberation Mono", "Courier New", monospace !important;
+        font-size: 0.95rem !important;
+        line-height: 1.45 !important;
+        white-space: pre !important;
+        tab-size: 4;
+    }
+
+    div[data-testid="stCodeBlock"] pre,
+    div[data-testid="stCodeBlock"] code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+            "Liberation Mono", "Courier New", monospace !important;
+    }
+
+    .alt-tabs-problem {
+        margin-top: 0.35rem;
+        margin-bottom: 0.8rem;
+        padding: 0.55rem 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(255, 75, 75, 0.28);
+        background: rgba(255, 75, 75, 0.08);
+        color: rgb(255, 214, 214);
+        font-size: 0.92rem;
+        line-height: 1.35;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 INSTRUMENTS = {
     "acoustic_guitar": {
@@ -80,6 +113,52 @@ INSTRUMENTS = {
     },
 }
 
+
+def humanize_error(message: str, instrument: str) -> str:
+    lower = message.lower().strip()
+
+    if "expected 6 non-empty lines" in lower and instrument == "bass":
+        return "Bass input must contain 4 string lines per block. This one does not match that format."
+    if "expected 4 non-empty lines" in lower and instrument != "bass":
+        return "Guitar input must contain 6 string lines per block. This one does not match that format."
+    if "expected 4 lines for this instrument" in lower and instrument != "bass":
+        return "This looks like a bass tab, but the selected instrument is a guitar."
+    if "expected 6 lines for this instrument" in lower and instrument == "bass":
+        return "This looks like a guitar tab, but the selected instrument is bass."
+    if "invalid tab line without '|'" in lower or "missing '|' separator" in lower:
+        return "Invalid tab format. Each string line must contain bar separators like |--0--|."
+    if (
+        "measure content must start with '|'" in lower
+        or "measure content must end with '|'" in lower
+    ):
+        return "Invalid measure formatting. Every measure line must start and end with '|'."
+    if "all strings must have the same number of measures" in lower:
+        return "Invalid tab format. All strings must have the same number of measures."
+    if "corresponding measures must have identical widths" in lower:
+        return "Invalid tab format. Measures must stay aligned across all strings."
+    if (
+        "unsupported or ambiguous string label" in lower
+        or "not valid for this instrument" in lower
+    ):
+        return "The string labels do not match the selected instrument."
+    if "no notes were found" in lower or "empty tab" in lower:
+        return "No playable notes were found in the tab."
+    if "cannot shift positions on an empty event stream" in lower:
+        return "No playable notes were found, so the target position cannot be applied."
+    if "only monophonic" in lower or "multiple notes on same string" in lower:
+        return "Only simple monophonic tabs are supported right now."
+
+    return message
+
+
+def show_problem_message(message: str):
+    safe = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    st.markdown(
+        f'<div class="alt-tabs-problem">{safe}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 defaults = {
     "text": "",
     "instrument": "acoustic_guitar",
@@ -95,41 +174,6 @@ defaults = {
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
-
-
-def humanize_error(message: str, instrument: str) -> str:
-    lower = message.lower()
-
-    if "expected 4 lines" in lower and instrument != "bass":
-        return "This looks like a bass tab, but the selected instrument is a guitar."
-    if "expected 6 lines" in lower and instrument == "bass":
-        return "This looks like a guitar tab, but the selected instrument is bass."
-    if "incomplete tab block" in lower and instrument == "bass":
-        return "Bass tabs must contain 4 non-empty string lines per block."
-    if "incomplete tab block" in lower and instrument != "bass":
-        return "Guitar tabs must contain 6 non-empty string lines per block."
-    if "invalid tab line without '|'" in lower or "missing '|' separator" in lower:
-        return "Invalid tab format. Each string line must contain measure bars '|'."
-    if "measure content must start" in lower or "measure content must end" in lower:
-        return "Invalid tab format. Every measure line must begin and end with '|'."
-    if "same number of measures" in lower or "identical widths" in lower:
-        return "The tab is malformed. All strings must have aligned measures."
-    if "label 'b' not valid" in lower and instrument == "bass":
-        return "This looks like a guitar tab, but the selected instrument is bass."
-    if "label 'e' not valid" in lower and instrument == "bass":
-        return "This looks like a guitar tab, but the selected instrument is bass."
-    if "parsed string numbers" in lower:
-        return "The string labels do not match the selected instrument."
-    if "no notes were found" in lower:
-        return "No playable notes were found in the tab."
-    if "monophonic" in lower:
-        return "Only monophonic tabs are supported right now."
-    if "no playable position" in lower:
-        return "Some notes cannot be played on the selected instrument in the requested position."
-    if "invalid position" in lower or "invalid played position" in lower:
-        return "The tab contains a fret position that is not valid for the selected instrument."
-
-    return message
 
 
 def recompute():
@@ -159,21 +203,16 @@ def recompute():
         )
         st.session_state.rendered_tab = result.rendered_tab
         st.session_state.last_error = ""
-    except (
-        InputTabError,
-        TabParseError,
-        ParserTabParseError,
-        TabRenderError,
-        PipelineError,
-        TransformError,
-    ) as e:
+    except (InputTabError, PipelineError, TabParseError, TabRenderError) as exc:
         st.session_state.rendered_tab = ""
         st.session_state.last_error = humanize_error(
-            str(e), st.session_state.instrument
+            str(exc), st.session_state.instrument
         )
     except Exception:
         st.session_state.rendered_tab = ""
-        st.session_state.last_error = "Could not process this tab."
+        st.session_state.last_error = (
+            "Could not process this tab. Check the tab format and selected instrument."
+        )
 
 
 def set_instrument(name: str):
@@ -185,13 +224,13 @@ def set_instrument(name: str):
         st.session_state.anchor_string is not None
         and st.session_state.anchor_string > string_count
     ):
-        st.session_state.anchor_string = None
+        st.session_state.anchor_string = string_count
 
     if (
         st.session_state.anchor_fret is not None
         and st.session_state.anchor_fret > visible_frets
     ):
-        st.session_state.anchor_fret = None
+        st.session_state.anchor_fret = visible_frets
 
     recompute()
 
@@ -241,12 +280,16 @@ st.title("Alt Tabs")
 
 render_instrument_selector()
 
-st.text_area(
-    "Input tab",
-    key="text",
-    height=320,
-    on_change=recompute,
-)
+with st.form("tab_input_form", clear_on_submit=False):
+    st.text_area(
+        "Input tab",
+        key="text",
+        height=320,
+    )
+    submitted = st.form_submit_button("Apply tab")
+
+if submitted:
+    recompute()
 
 cfg = INSTRUMENTS[st.session_state.instrument]
 
@@ -255,7 +298,7 @@ if (
     and st.session_state.anchor_string is not None
     and st.session_state.anchor_string > 4
 ):
-    st.session_state.anchor_string = None
+    st.session_state.anchor_string = 4
 
 st.subheader("Target position")
 
@@ -269,40 +312,30 @@ component_result = fretboard_selector(
     key="main_fretboard",
 )
 
-clicked_new_position = False
-
+selected_position = None
 if component_result is not None:
-    selected = getattr(component_result, "selectedPosition", None)
-
-    new_string = None
-    new_fret = None
-
-    if selected:
-        new_string = selected.get("stringNumber")
-        new_fret = selected.get("fret")
+    if isinstance(component_result, dict):
+        selected_position = component_result.get("selectedPosition")
     else:
-        new_string = getattr(component_result, "selectedString", None)
-        new_fret = getattr(component_result, "selectedFret", None)
+        selected_position = getattr(component_result, "selectedPosition", None)
 
-    if new_string is not None:
-        new_string = int(new_string)
-    if new_fret is not None:
-        new_fret = int(new_fret)
+selection_changed = False
+if selected_position:
+    new_string = int(selected_position["stringNumber"])
+    new_fret = int(selected_position["fret"])
 
     if (
-        new_string is not None
-        and new_fret is not None
-        and (
-            new_string != st.session_state.anchor_string
-            or new_fret != st.session_state.anchor_fret
-            or not st.session_state.shift_positions
-        )
+        new_string != st.session_state.anchor_string
+        or new_fret != st.session_state.anchor_fret
     ):
         st.session_state.anchor_string = new_string
         st.session_state.anchor_fret = new_fret
         st.session_state.shift_positions = True
-        clicked_new_position = True
+        selection_changed = True
 
+if selection_changed:
+    recompute()
+    st.rerun()
 st.selectbox(
     "Bias",
     [PositionBias.DOWN, PositionBias.CENTERED, PositionBias.UP],
@@ -312,24 +345,17 @@ st.selectbox(
     on_change=recompute,
 )
 
-if clicked_new_position:
-    recompute()
-
 if st.session_state.anchor_string is None or st.session_state.anchor_fret is None:
     st.caption("Selected target: none")
 else:
-    selected_note = presets[st.session_state.instrument].note_at(
-        st.session_state.anchor_string,
-        st.session_state.anchor_fret,
-    )
     st.caption(
-        f"Selected target: string {st.session_state.anchor_string}, "
-        f"fret {st.session_state.anchor_fret}, "
-        f"note {NoteName.from_pitch(selected_note.pitch)}"
+        f"Selected target: string {st.session_state.anchor_string}, fret "
+        f"{st.session_state.anchor_fret}, note "
+        f"{NoteName.from_pitch(presets[st.session_state.instrument].note_at(st.session_state.anchor_string, st.session_state.anchor_fret).pitch)}"
     )
 
 if st.session_state.last_error:
-    st.caption(st.session_state.last_error)
+    st.error(st.session_state.last_error)
 elif st.session_state.rendered_tab:
     st.subheader("Output")
     st.code(st.session_state.rendered_tab)

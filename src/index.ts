@@ -14,6 +14,7 @@ function ensureStyles(parentElement: HTMLElement | ShadowRoot): void {
   style.textContent = componentCss;
   parentElement.appendChild(style);
 }
+
 type StringNumber = number;
 
 type Theme = {
@@ -31,6 +32,11 @@ type Theme = {
   bgBottom: string;
 };
 
+type Cell = {
+  stringNumber: StringNumber;
+  fret: number;
+};
+
 type ComponentData = {
   instrument: "acoustic_guitar" | "electric_guitar" | "bass";
   stringCount: number;
@@ -42,13 +48,6 @@ type ComponentData = {
 
 type FrontendState = {
   selectedPosition: Cell | null;
-  selectedString: number | null;
-  selectedFret: number | null;
-};
-
-type Cell = {
-  stringNumber: StringNumber;
-  fret: number;
 };
 
 type Geometry = {
@@ -123,10 +122,10 @@ function geometryForInstrument(data: ComponentData): Geometry {
     boardRight: 1540,
     openAreaLeft: 56,
     visibleFrets: data.visibleFrets,
-    nutHalfWidth: 70,
-    bodyHalfWidth: 96,
+    nutHalfWidth: 72,
+    bodyHalfWidth: 102,
     edgePaddingNut: 10,
-    edgePaddingBody: 14,
+    edgePaddingBody: 16,
     stringCount: data.stringCount,
   });
 }
@@ -138,78 +137,72 @@ function yOnString(
 ): number {
   const t =
     (x - geometry.boardLeft) / (geometry.boardRight - geometry.boardLeft);
-  const clampedT = Math.max(0, Math.min(1, t));
+  const halfWidth =
+    geometry.nutHalfWidth +
+    t * (geometry.bodyHalfWidth - geometry.nutHalfWidth);
 
-  const nutTop =
-    geometry.centerY - geometry.nutHalfWidth + geometry.edgePaddingNut;
-  const nutBottom =
-    geometry.centerY + geometry.nutHalfWidth - geometry.edgePaddingNut;
+  if (geometry.stringCount === 1) {
+    return geometry.centerY;
+  }
 
-  const bodyTop =
-    geometry.centerY - geometry.bodyHalfWidth + geometry.edgePaddingBody;
-  const bodyBottom =
-    geometry.centerY + geometry.bodyHalfWidth - geometry.edgePaddingBody;
-
-  const fraction =
-    geometry.stringCount === 1
-      ? 0
-      : (stringNumber - 1) / (geometry.stringCount - 1);
-
-  const yAtNut = nutTop + fraction * (nutBottom - nutTop);
-  const yAtBody = bodyTop + fraction * (bodyBottom - bodyTop);
-
-  return yAtNut + clampedT * (yAtBody - yAtNut);
-}
-
-function midpointY(
-  geometry: Geometry,
-  a: number,
-  b: number,
-  x: number,
-): number {
-  return (yOnString(geometry, a, x) + yOnString(geometry, b, x)) / 2;
+  const ratio = (stringNumber - 1) / (geometry.stringCount - 1);
+  return geometry.centerY - halfWidth + ratio * (halfWidth * 2);
 }
 
 function stringGauge(geometry: Geometry, stringNumber: number): number {
-  if (geometry.stringCount === 4) {
-    return [3.6, 4.4, 5.3, 6.5][stringNumber - 1];
+  const maxGauge = geometry.stringCount === 4 ? 4.6 : 3.8;
+  const minGauge = geometry.stringCount === 4 ? 2.2 : 1.6;
+
+  if (geometry.stringCount === 1) {
+    return maxGauge;
   }
-  return [1.3, 1.6, 1.9, 2.3, 2.9, 3.6][stringNumber - 1];
+
+  const ratio = (stringNumber - 1) / (geometry.stringCount - 1);
+  return minGauge + ratio * (maxGauge - minGauge);
 }
 
 function boardPath(geometry: Geometry): string {
   const left = geometry.boardLeft;
   const right = geometry.boardRight;
-  const topLeft = geometry.centerY - geometry.nutHalfWidth;
-  const bottomLeft = geometry.centerY + geometry.nutHalfWidth;
-  const topRight = geometry.centerY - geometry.bodyHalfWidth;
-  const bottomRight = geometry.centerY + geometry.bodyHalfWidth;
+  const cy = geometry.centerY;
+
+  const topLeft = cy - geometry.nutHalfWidth - geometry.edgePaddingNut;
+  const botLeft = cy + geometry.nutHalfWidth + geometry.edgePaddingNut;
+  const topRight = cy - geometry.bodyHalfWidth - geometry.edgePaddingBody;
+  const botRight = cy + geometry.bodyHalfWidth + geometry.edgePaddingBody;
 
   return [
     `M ${left} ${topLeft}`,
     `L ${right} ${topRight}`,
-    `L ${right} ${bottomRight}`,
-    `L ${left} ${bottomLeft}`,
+    `L ${right} ${botRight}`,
+    `L ${left} ${botLeft}`,
     "Z",
   ].join(" ");
 }
 
 function openCellPolygon(geometry: Geometry, stringNumber: number): string {
-  const topY =
-    stringNumber === 1
-      ? yOnString(geometry, 1, geometry.boardLeft) - 12
-      : midpointY(geometry, stringNumber - 1, stringNumber, geometry.boardLeft);
+  const x1 = geometry.openAreaLeft;
+  const x2 = geometry.boardLeft;
+  const pad = 10;
 
-  const bottomY =
-    stringNumber === geometry.stringCount
-      ? yOnString(geometry, geometry.stringCount, geometry.boardLeft) + 12
-      : midpointY(geometry, stringNumber, stringNumber + 1, geometry.boardLeft);
+  const y1a = yOnString(geometry, stringNumber, x1);
+  const y1b = yOnString(geometry, stringNumber, x2);
+
+  const prev =
+    stringNumber > 1 ? yOnString(geometry, stringNumber - 1, x2) : y1b - 22;
+  const next =
+    stringNumber < geometry.stringCount
+      ? yOnString(geometry, stringNumber + 1, x2)
+      : y1b + 22;
+
+  const topRight = (prev + y1b) / 2;
+  const bottomRight = (y1b + next) / 2;
 
   return [
-    `${geometry.openAreaLeft},${topY}`,
-    `${geometry.boardLeft},${topY}`,
-    `${geometry.boardLeft},${bottomY}`,
-    `${geometry.openAreaLeft},${bottomY}`,
+    `${x1},${y1a - pad}`,
+    `${x2},${topRight}`,
+    `${x2},${bottomRight}`,
+    `${x1},${y1a + pad}`,
   ].join(" ");
 }
 
@@ -221,31 +214,32 @@ function fretCellPolygon(
   const x1 = geometry.fretBoundaries[fret - 1];
   const x2 = geometry.fretBoundaries[fret];
 
-  const topLeftY =
-    stringNumber === 1
-      ? yOnString(geometry, 1, x1) - 12
-      : midpointY(geometry, stringNumber - 1, stringNumber, x1);
+  const y1l = yOnString(geometry, stringNumber, x1);
+  const y1r = yOnString(geometry, stringNumber, x2);
 
-  const topRightY =
-    stringNumber === 1
-      ? yOnString(geometry, 1, x2) - 12
-      : midpointY(geometry, stringNumber - 1, stringNumber, x2);
+  const prevL =
+    stringNumber > 1 ? yOnString(geometry, stringNumber - 1, x1) : y1l - 22;
+  const nextL =
+    stringNumber < geometry.stringCount
+      ? yOnString(geometry, stringNumber + 1, x1)
+      : y1l + 22;
+  const prevR =
+    stringNumber > 1 ? yOnString(geometry, stringNumber - 1, x2) : y1r - 22;
+  const nextR =
+    stringNumber < geometry.stringCount
+      ? yOnString(geometry, stringNumber + 1, x2)
+      : y1r + 22;
 
-  const bottomLeftY =
-    stringNumber === geometry.stringCount
-      ? yOnString(geometry, geometry.stringCount, x1) + 12
-      : midpointY(geometry, stringNumber, stringNumber + 1, x1);
-
-  const bottomRightY =
-    stringNumber === geometry.stringCount
-      ? yOnString(geometry, geometry.stringCount, x2) + 12
-      : midpointY(geometry, stringNumber, stringNumber + 1, x2);
+  const topLeft = (prevL + y1l) / 2;
+  const bottomLeft = (y1l + nextL) / 2;
+  const topRight = (prevR + y1r) / 2;
+  const bottomRight = (y1r + nextR) / 2;
 
   return [
-    `${x1},${topLeftY}`,
-    `${x2},${topRightY}`,
-    `${x2},${bottomRightY}`,
-    `${x1},${bottomLeftY}`,
+    `${x1},${topLeft}`,
+    `${x2},${topRight}`,
+    `${x2},${bottomRight}`,
+    `${x1},${bottomLeft}`,
   ].join(" ");
 }
 
@@ -253,14 +247,12 @@ function markerPosition(
   geometry: Geometry,
   cell: Cell,
 ): { x: number; y: number } {
-  if (cell.fret === 0) {
-    const x = (geometry.openAreaLeft + geometry.boardLeft) / 2;
-    return { x, y: yOnString(geometry, cell.stringNumber, geometry.boardLeft) };
-  }
-
-  const x1 = geometry.fretBoundaries[cell.fret - 1];
-  const x2 = geometry.fretBoundaries[cell.fret];
-  const x = (x1 + x2) / 2;
+  const x =
+    cell.fret === 0
+      ? (geometry.openAreaLeft + geometry.boardLeft) / 2
+      : (geometry.fretBoundaries[cell.fret - 1] +
+          geometry.fretBoundaries[cell.fret]) /
+        2;
 
   return { x, y: yOnString(geometry, cell.stringNumber, x) };
 }
@@ -340,6 +332,7 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
   const { parentElement, data, setStateValue } = args;
 
   ensureStyles(parentElement);
+
   let root = parentElement.querySelector<HTMLDivElement>(".component-root");
   if (!root) {
     root = document.createElement("div");
@@ -349,7 +342,7 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
 
   const geometry = geometryForInstrument(data);
 
-  const incomingSelected =
+  const incomingSelected: Cell | null =
     data.selectedString != null && data.selectedFret != null
       ? {
           stringNumber: data.selectedString,
@@ -371,27 +364,36 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
   const hoverMarkup = instance.hovered
     ? renderCellOverlay(geometry, instance.hovered, "hover-cell")
     : "";
-  const selectedMarkup = instance.selected
-    ? renderCellOverlay(geometry, instance.selected, "selected-cell")
-    : "";
-  const marker = instance.selected
-    ? markerPosition(geometry, instance.selected)
-    : null;
-  const badgeMarkup = instance.selected
-    ? `<div class="badge">String ${instance.selected.stringNumber} · Fret ${instance.selected.fret}</div>`
-    : `<div class="badge">No target selected</div>`;
-  const markerMarkup = marker
-    ? `
-        <circle cx="${marker.x}" cy="${marker.y}" r="11" class="selected-marker-halo" />
-        <circle
-          cx="${marker.x}"
-          cy="${marker.y}"
-          r="7.5"
-          class="selected-marker"
-          style="fill:${data.theme.markerColor}; stroke:${data.theme.markerStroke}"
-        />
-      `
-    : "";
+
+  const selectedMarkup =
+    instance.selected != null
+      ? renderCellOverlay(geometry, instance.selected, "selected-cell")
+      : "";
+
+  const markerMarkup =
+    instance.selected != null
+      ? (() => {
+          const { x: markerX, y: markerY } = markerPosition(
+            geometry,
+            instance.selected!,
+          );
+          return `
+            <circle cx="${markerX}" cy="${markerY}" r="11" class="selected-marker-halo" />
+            <circle
+              cx="${markerX}"
+              cy="${markerY}"
+              r="7.5"
+              class="selected-marker"
+              style="fill:${data.theme.markerColor}; stroke:${data.theme.markerStroke}"
+            />
+          `;
+        })()
+      : "";
+
+  const badgeMarkup =
+    instance.selected != null
+      ? `<div class="badge">String ${instance.selected.stringNumber} · Fret ${instance.selected.fret}</div>`
+      : `<div class="badge">No target selected</div>`;
 
   const fretLines = Array.from(
     { length: geometry.visibleFrets + 1 },
@@ -433,6 +435,7 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
   }).join("\n");
 
   const hitRegions: string[] = [];
+
   for (let n = 1; n <= geometry.stringCount; n += 1) {
     hitRegions.push(
       `<polygon points="${openCellPolygon(geometry, n)}" class="hit-cell" data-string="${n}" data-fret="0" />`,
@@ -534,15 +537,16 @@ const FretboardComponent: FrontendRenderer<FrontendState, ComponentData> = (
     };
 
     const onClick = () => {
-      const selected: Cell = {
+      console.log("CLICK", cell.dataset.string, cell.dataset.fret);
+      const selected = {
         stringNumber: Number(cell.dataset.string),
         fret: Number(cell.dataset.fret),
       };
-      instance.selected = selected;
       setStateValue("selectedPosition", selected);
-      setStateValue("selectedString", selected.stringNumber);
-      setStateValue("selectedFret", selected.fret);
-      root!.dispatchEvent(new CustomEvent("rerender"));
+      console.log("SENDING", {
+        string: cell.dataset.string,
+        fret: cell.dataset.fret,
+      });
     };
 
     cell.addEventListener("mouseenter", onEnter);
