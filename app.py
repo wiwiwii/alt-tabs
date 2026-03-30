@@ -1,15 +1,25 @@
 from pathlib import Path
+import logging
 
 import streamlit as st
 
 from alttabs.fretboard_component import fretboard_selector
 from alttabs.input_tab import InputTabError
-from alttabs.pipeline import PipelineError, TransformRequest, transform_tab
+from alttabs.pipeline import (
+    PipelineError,
+    PolyphonyPolicy,
+    TransformRequest,
+    transform_tab,
+)
 from alttabs.position_shift import PositionBias
+from alttabs.instrument import presets
+from alttabs.midi_to_tab import MidiTabError, render_midi_file_to_tab
+from alttabs.pitch import NoteName
+from alttabs.score_ingest import ScoreIngestError, ingest_partition_to_midi
 from alttabs.score import TabRenderError
 from alttabs.tab import TabParseError
-from src.alttabs.instrument import presets
-from src.alttabs.pitch import NoteName
+
+LOGGER = logging.getLogger(__name__)
 
 st.set_page_config(page_title="Alt Tabs", layout="wide")
 
@@ -55,7 +65,7 @@ INSTRUMENTS = {
         "label": "Acoustic Guitar",
         "image": str(ASSETS_DIR / "martin.png"),
         "string_count": 6,
-        "visible_frets": 14,
+        "visible_frets": 15,
         "theme": {
             "boardBase": "#1f1a17",
             "boardEdge": "#2b2521",
@@ -147,18 +157,16 @@ def humanize_error(message: str, instrument: str) -> str:
         return "No playable notes were found in the tab."
     if "cannot shift positions on an empty event stream" in lower:
         return "No playable notes were found, so the target position cannot be applied."
+    if "no playable position" in lower or "no playable positions found" in lower:
+        return "Requested transposition/position is unplayable on this instrument. Try another target fret, lower transposition, or a different instrument."
+    if "invalid anchor position" in lower:
+        return "Selected target position is invalid for this instrument. Pick another string/fret."
+    if "polyphonic input" in lower:
+        return "Polyphonic input was reduced to one note at a time. Change polyphony policy if needed."
     if "only monophonic" in lower or "multiple notes on same string" in lower:
         return "Only simple monophonic tabs are supported right now."
 
     return message
-
-
-def show_problem_message(message: str):
-    safe = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    st.markdown(
-        f'<div class="alt-tabs-problem">{safe}</div>',
-        unsafe_allow_html=True,
-    )
 
 
 defaults = {
@@ -169,9 +177,13 @@ defaults = {
     "anchor_string": None,
     "anchor_fret": None,
     "max_fret_deviation": 6,
+    "polyphony_policy": PolyphonyPolicy.TOP_NOTE,
     "measures_per_line": 2,
     "rendered_tab": "",
     "last_error": "",
+    "score_midi_path": None,
+    "score_has_treble": False,
+    "score_has_bass": False,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -200,6 +212,7 @@ def recompute():
                 anchor_string=st.session_state.anchor_string if has_anchor else None,
                 anchor_fret=st.session_state.anchor_fret if has_anchor else None,
                 max_fret_deviation=st.session_state.max_fret_deviation,
+                polyphony_policy=st.session_state.polyphony_policy,
                 measures_per_line=st.session_state.measures_per_line,
             )
         )
@@ -211,10 +224,44 @@ def recompute():
             str(exc), st.session_state.instrument
         )
     except Exception:
+        LOGGER.exception("Unexpected error while processing tab")
         st.session_state.rendered_tab = ""
         st.session_state.last_error = (
-            "Could not process this tab. Check the tab format and selected instrument."
+            "Unexpected processing error. Please retry or adjust the input tab."
         )
+
+
+def process_uploaded_score(uploaded_file):
+    import tempfile
+
+    suffix = Path(uploaded_file.name).suffix or ".pdf"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(uploaded_file.getvalue())
+        tmp_path = tmp.name
+
+    result = ingest_partition_to_midi(tmp_path)
+    st.session_state.score_midi_path = str(result.midi_path)
+    st.session_state.score_has_treble = result.has_treble_clef
+    st.session_state.score_has_bass = result.has_bass_clef
+
+
+def render_from_uploaded_score():
+    midi_path = st.session_state.score_midi_path
+    if not midi_path:
+        return
+
+    forced_instrument = st.session_state.instrument
+    if st.session_state.score_has_treble and st.session_state.score_has_bass:
+        forced_instrument = st.session_state.get("score_target_instrument", "acoustic_guitar")
+
+    fretboard = presets[forced_instrument]
+    rendered = render_midi_file_to_tab(
+        midi_path=midi_path,
+        fretboard=fretboard,
+        measures_per_line=st.session_state.measures_per_line,
+    )
+    st.session_state.rendered_tab = rendered
+    st.session_state.last_error = ""
 
 
 def set_instrument(name: str):
@@ -293,6 +340,45 @@ with st.form("tab_input_form", clear_on_submit=False):
 if submitted:
     recompute()
 
+st.subheader("Or upload image/PDF (tab or score)")
+uploaded = st.file_uploader(
+    "Upload PDF/image",
+    type=["pdf", "png", "jpg", "jpeg", "tiff", "bmp"],
+)
+process_ocr = st.button("Process with Audiveris OCR")
+if process_ocr and uploaded is not None:
+    try:
+        process_uploaded_score(uploaded)
+        if st.session_state.score_has_treble and st.session_state.score_has_bass:
+            st.info("Both treble and bass clefs detected. Choose output instrument below.")
+    except ScoreIngestError as exc:
+        st.session_state.last_error = str(exc)
+        st.session_state.rendered_tab = ""
+    except Exception:
+        LOGGER.exception("Unexpected OCR processing error")
+        st.session_state.last_error = "Could not process uploaded score with Audiveris."
+        st.session_state.rendered_tab = ""
+
+if st.session_state.score_has_treble and st.session_state.score_has_bass:
+    st.radio(
+        "Detected both clefs. Generate tabs for:",
+        options=["acoustic_guitar", "bass"],
+        key="score_target_instrument",
+        format_func=lambda x: "Guitar" if x != "bass" else "Bass",
+    )
+
+if st.session_state.score_midi_path:
+    if st.button("Generate tabs from OCR MIDI"):
+        try:
+            render_from_uploaded_score()
+        except (MidiTabError, TabRenderError, PipelineError) as exc:
+            st.session_state.last_error = humanize_error(str(exc), st.session_state.instrument)
+            st.session_state.rendered_tab = ""
+        except Exception:
+            LOGGER.exception("Unexpected MIDI-to-tab conversion error")
+            st.session_state.last_error = "Could not convert OCR MIDI to tabs."
+            st.session_state.rendered_tab = ""
+
 cfg = INSTRUMENTS[st.session_state.instrument]
 
 if (
@@ -343,6 +429,19 @@ st.selectbox(
     [PositionBias.DOWN, PositionBias.CENTERED, PositionBias.UP],
     key="bias",
     width=200,
+    format_func=lambda x: x.value,
+    on_change=recompute,
+)
+st.selectbox(
+    "Polyphony input policy",
+    [
+        PolyphonyPolicy.TOP_NOTE,
+        PolyphonyPolicy.BOTTOM_NOTE,
+        PolyphonyPolicy.FIRST_NOTE,
+        PolyphonyPolicy.ERROR,
+    ],
+    key="polyphony_policy",
+    width=240,
     format_func=lambda x: x.value,
     on_change=recompute,
 )
