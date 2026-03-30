@@ -1,4 +1,5 @@
 from alttabs.instrument import PlayedNote
+from alttabs.errors import PolyphonyNotSupportedError, RangeNotPlayableError
 from alttabs.pitch import Interval
 from alttabs.score import RealizedEvent
 
@@ -19,7 +20,7 @@ def transpose_monophonic_events(
 
     for idx, event in enumerate(events):
         if len(event.notes) != 1:
-            raise TransformError(
+            raise PolyphonyNotSupportedError(
                 f"Event {idx} is not monophonic: expected 1 note, got {len(event.notes)}"
             )
 
@@ -28,7 +29,7 @@ def transpose_monophonic_events(
 
         positions = fretboard.positions_for(new_pitch)
         if not positions:
-            raise TransformError(
+            raise RangeNotPlayableError(
                 f"No playable position for transposed pitch {new_pitch.value} in event {idx}"
             )
 

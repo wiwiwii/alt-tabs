@@ -87,12 +87,16 @@ def split_raw_tab_blocks(text: str, expected_string_count: int) -> list[RawTabBl
         if i >= len(raw_lines):
             break
 
+        if not is_tab_line(raw_lines[i]):
+            i += 1
+            continue
+
         block_lines: list[str] = []
         start_i = i
 
         while i < len(raw_lines) and len(block_lines) < expected_string_count:
             line = raw_lines[i]
-            if line.strip():
+            if is_tab_line(line):
                 block_lines.append(line.rstrip())
             i += 1
 
@@ -107,15 +111,31 @@ def split_raw_tab_blocks(text: str, expected_string_count: int) -> list[RawTabBl
             )
 
         repeat = 1
+        for line in block_lines:
+            inline_repeat = extract_repeat(line)
+            if inline_repeat is not None:
+                repeat = inline_repeat
 
-        while i < len(raw_lines) and not raw_lines[i].strip():
-            i += 1
+        scan_i = i
+        non_tab_seen = 0
+        while scan_i < len(raw_lines) and non_tab_seen <= 2:
+            candidate = raw_lines[scan_i].strip()
+            if not candidate:
+                scan_i += 1
+                continue
 
-        if i < len(raw_lines):
-            match = re.fullmatch(r"x(\d+)", raw_lines[i].strip(), flags=re.IGNORECASE)
-            if match:
-                repeat = int(match.group(1))
-                i += 1
+            repeat_match = extract_repeat(candidate)
+            if repeat_match is not None:
+                repeat = repeat_match
+                if scan_i == i:
+                    i += 1
+                break
+
+            if is_tab_line(raw_lines[scan_i]):
+                break
+
+            non_tab_seen += 1
+            scan_i += 1
 
         original_text = "\n".join(block_lines)
         sanitized_lines = [sanitize_tab_line(line) for line in block_lines]
@@ -133,6 +153,32 @@ def split_raw_tab_blocks(text: str, expected_string_count: int) -> list[RawTabBl
     return blocks
 
 
+def is_tab_line(line: str) -> bool:
+    if "|" not in line:
+        return False
+    prefix, _ = line.split("|", 1)
+    label = prefix.strip()
+    if not label:
+        return True
+    return label in {"e", "B", "G", "D", "A", "E"} or label.isdigit()
+
+
+def extract_repeat(line: str) -> int | None:
+    if "|" in line:
+        line = line[line.rfind("|") + 1 :].strip()
+
+    patterns = (
+        r"^x(\d+)$",
+        r"^\(x(\d+)\)$",
+        r"^repeat\s*x(\d+)$",
+    )
+    for pattern in patterns:
+        match = re.match(pattern, line, flags=re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+    return None
+
+
 def sanitize_tab_line(line: str) -> str:
     """
     Sanitize one tab line so the current narrow TabParser can ingest it.
@@ -148,7 +194,10 @@ def sanitize_tab_line(line: str) -> str:
     if "|" not in line:
         raise InputTabError(f"Invalid tab line without '|': {line}")
 
-    before_bar, after_bar = line.split("|", 1)
+    last_bar = line.rfind("|")
+    core = line[: last_bar + 1]
+
+    before_bar, after_bar = core.split("|", 1)
     label = before_bar
     content = "|" + after_bar
 

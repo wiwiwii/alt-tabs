@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from alttabs.errors import AltTabsError
 from alttabs.input_tab import parse_tab_text, to_realized_events
 from alttabs.instrument import presets
 from alttabs.pitch import Interval
@@ -49,13 +50,14 @@ def transform_tab(request: TransformRequest) -> TransformResult:
 
     fretboard = presets[request.instrument]
 
-    parsed_blocks = parse_tab_text(request.text, fretboard)
-    events = to_realized_events(parsed_blocks)
+    try:
+        parsed_blocks = parse_tab_text(request.text, fretboard)
+        events = to_realized_events(parsed_blocks)
 
-    if not events:
-        raise PipelineError("No notes were found in the tab.")
+        if not events:
+            raise PipelineError("No notes were found in the tab.")
 
-    first_pitch = events[0].notes[0].pitch
+        first_pitch = events[0].notes[0].pitch
     # if request.anchor_string is not None and request.anchor_fret is not None:
     #     target_pitch = fretboard.note_at(
     #         request.anchor_string, request.anchor_fret
@@ -71,48 +73,49 @@ def transform_tab(request: TransformRequest) -> TransformResult:
     #         Interval(request.transpose_semitones),
     #     )
 
-    if request.shift_positions:
-        if request.anchor_string is not None and request.anchor_fret is not None:
-            target_pitch = fretboard.note_at(
-                request.anchor_string, request.anchor_fret
-            ).pitch
-            events = transpose_monophonic_events(
-                events, fretboard, Interval(target_pitch.value - first_pitch.value)
+        if request.shift_positions:
+            if request.anchor_string is not None and request.anchor_fret is not None:
+                target_pitch = fretboard.note_at(
+                    request.anchor_string, request.anchor_fret
+                ).pitch
+                events = transpose_monophonic_events(
+                    events, fretboard, Interval(target_pitch.value - first_pitch.value)
+                )
+
+            if request.anchor_string is None or request.anchor_fret is None:
+                first_note = events[0].notes[0]
+                anchor_string = first_note.position.string
+                anchor_fret = first_note.position.fret
+            else:
+                anchor_string = request.anchor_string
+                anchor_fret = request.anchor_fret
+
+            events = shift_monophonic_events(
+                events,
+                fretboard,
+                RetabPreferences(
+                    anchor_string=anchor_string,
+                    anchor_fret=anchor_fret,
+                    bias=request.bias,
+                    max_fret_deviation=request.max_fret_deviation,
+                    prefer_open_strings=request.prefer_open_strings,
+                ),
             )
 
-        if request.anchor_string is None or request.anchor_fret is None:
-            first_note = events[0].notes[0]
-            anchor_string = first_note.position.string
-            anchor_fret = first_note.position.fret
-        else:
-            anchor_string = request.anchor_string
-            anchor_fret = request.anchor_fret
-
-        events = shift_monophonic_events(
+        renderer = TabRenderer(fretboard)
+        rendered = renderer.render(
             events,
-            fretboard,
-            RetabPreferences(
-                anchor_string=anchor_string,
-                anchor_fret=anchor_fret,
-                bias=request.bias,
-                max_fret_deviation=request.max_fret_deviation,
-                prefer_open_strings=request.prefer_open_strings,
-            ),
+            measures_per_line=request.measures_per_line,
         )
+        measure_count = 0
+        for block in parsed_blocks:
+            measure_count += block.parsed_tab.measure_count * block.raw_block.repeat
 
-    renderer = TabRenderer(fretboard)
-    rendered = renderer.render(
-        events,
-        measures_per_line=request.measures_per_line,
-    )
-
-    measure_count = 0
-    for block in parsed_blocks:
-        measure_count += block.parsed_tab.measure_count * block.raw_block.repeat
-
-    return TransformResult(
-        rendered_tab=rendered,
-        parsed_block_count=len(parsed_blocks),
-        expanded_event_count=len(events),
-        measure_count=measure_count,
-    )
+        return TransformResult(
+            rendered_tab=rendered,
+            parsed_block_count=len(parsed_blocks),
+            expanded_event_count=len(events),
+            measure_count=measure_count,
+        )
+    except AltTabsError as exc:
+        raise PipelineError(str(exc)) from exc

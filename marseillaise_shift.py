@@ -5,7 +5,7 @@ from alttabs.position_shift import PositionBias
 from alttabs.score import RealizedEvent, TabRenderer
 from alttabs.tab import TabParser
 from alttabs.transform import transpose_monophonic_events
-from src.alttabs.input_tab import parse_tab_text, to_realized_events
+from alttabs.input_tab import parse_tab_text, to_realized_events
 
 with open("la_marseillaise.txt") as f:
     text = f.read()
@@ -15,7 +15,6 @@ result = transform_tab(
     TransformRequest(
         text=text,
         instrument="acoustic_guitar",
-        transpose_semitones=-7,
         shift_positions=True,
         bias=PositionBias.DOWN,
         anchor_string=6,
@@ -26,4 +25,3 @@ result = transform_tab(
 )
 
 print(result.rendered_tab)
-
