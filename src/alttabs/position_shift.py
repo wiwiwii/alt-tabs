@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from math import inf
 
+from alttabs.errors import InvalidAnchorError, PolyphonyNotSupportedError, RangeNotPlayableError
 from alttabs.instrument import FretBoard, FretPosition, PlayedNote
 from alttabs.score import RealizedEvent
 
@@ -114,7 +115,7 @@ def shift_monophonic_events(
 def _validate_monophonic(events: list[RealizedEvent]) -> None:
     for idx, event in enumerate(events):
         if len(event.notes) != 1:
-            raise PositionShiftError(
+            raise PolyphonyNotSupportedError(
                 f"Event {idx} is not monophonic: expected 1 note, got {len(event.notes)}"
             )
 
@@ -122,7 +123,7 @@ def _validate_monophonic(events: list[RealizedEvent]) -> None:
 def _validate_anchor(fretboard: FretBoard, preferences: RetabPreferences) -> None:
     anchor = FretPosition(preferences.anchor_string, preferences.anchor_fret)
     if not fretboard.is_valid_position(anchor):
-        raise PositionShiftError(
+        raise InvalidAnchorError(
             f"Invalid anchor position: string {anchor.string}, fret {anchor.fret}"
         )
 
@@ -137,7 +138,7 @@ def _candidates_for_event(
     positions = fretboard.positions_for(pitch)
 
     if not positions:
-        raise PositionShiftError(
+        raise RangeNotPlayableError(
             f"No playable positions found for pitch {pitch.value} in event {event_index}"
         )
 

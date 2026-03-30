@@ -231,6 +231,12 @@ class TabParser:
             if len(tuning_numbers) == 4:
                 return 4
 
+        if label.isdigit():
+            numeric = int(label)
+            if numeric in tuning_numbers:
+                return numeric
+            raise TabParseError(f"Label '{label}' not valid for this instrument: {raw}")
+
         raise TabParseError(
             f"Unsupported or ambiguous string label '{label}' in line: {raw}"
         )
@@ -282,4 +288,3 @@ class TabParser:
             )
             for measure_index, at_column in keys
         ]
-

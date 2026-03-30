@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 
 import streamlit as st
 
@@ -6,10 +7,12 @@ from alttabs.fretboard_component import fretboard_selector
 from alttabs.input_tab import InputTabError
 from alttabs.pipeline import PipelineError, TransformRequest, transform_tab
 from alttabs.position_shift import PositionBias
+from alttabs.instrument import presets
+from alttabs.pitch import NoteName
 from alttabs.score import TabRenderError
 from alttabs.tab import TabParseError
-from src.alttabs.instrument import presets
-from src.alttabs.pitch import NoteName
+
+LOGGER = logging.getLogger(__name__)
 
 st.set_page_config(page_title="Alt Tabs", layout="wide")
 
@@ -55,7 +58,7 @@ INSTRUMENTS = {
         "label": "Acoustic Guitar",
         "image": str(ASSETS_DIR / "martin.png"),
         "string_count": 6,
-        "visible_frets": 14,
+        "visible_frets": 15,
         "theme": {
             "boardBase": "#1f1a17",
             "boardEdge": "#2b2521",
@@ -153,14 +156,6 @@ def humanize_error(message: str, instrument: str) -> str:
     return message
 
 
-def show_problem_message(message: str):
-    safe = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    st.markdown(
-        f'<div class="alt-tabs-problem">{safe}</div>',
-        unsafe_allow_html=True,
-    )
-
-
 defaults = {
     "text": "",
     "instrument": "acoustic_guitar",
@@ -211,9 +206,10 @@ def recompute():
             str(exc), st.session_state.instrument
         )
     except Exception:
+        LOGGER.exception("Unexpected error while processing tab")
         st.session_state.rendered_tab = ""
         st.session_state.last_error = (
-            "Could not process this tab. Check the tab format and selected instrument."
+            "Unexpected processing error. Please retry or adjust the input tab."
         )
 
 
